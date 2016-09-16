@@ -6,7 +6,7 @@ Just a liteweight Lite Code clone
  
 ## Planned Features:
  * More secure encryption
- * Remove name dependency from RemoteCall (So obfuscation is usable)
+ * Remove name dependency from RemoteCall (So obfuscation is usable & you can Inline the Prorotypes)
  * Replace string headers with byte enum
  
 ## Original
