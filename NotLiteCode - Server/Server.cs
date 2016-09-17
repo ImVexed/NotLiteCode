@@ -85,6 +85,7 @@ namespace NotLiteCode___Server
             sClient sC = new sClient();
             sC.cSocket = client;
             sC.sCls = new SharedClass();
+            sC.eCls = null;
             sC.bSize = new byte[4];
 
             BeginEncrypting(ref sC);
@@ -104,7 +105,7 @@ namespace NotLiteCode___Server
 
                 sC.cSocket.Receive(cBuffer);
 
-                cBuffer = AES_Decrypt(cBuffer, sC.bKey);
+                cBuffer = sC.eCls.AES_Decrypt(cBuffer);
 
                 object[] oMsg = BinaryFormatterSerializer.Deserialize(cBuffer);
 
@@ -157,16 +158,16 @@ namespace NotLiteCode___Server
             using (CngKey cPubKey = CngKey.Import(cBuf, CngKeyBlobFormat.EccPublicBlob))
                 sSymKey = sAlgo.DeriveKeyMaterial(cPubKey);
 
-            sC.bKey = sSymKey;
+            sC.eCls = new Encryption(sSymKey);
         }
 
         private void Send(sClient sC, params object[] param)
         {
             byte[] bSend = BinaryFormatterSerializer.Serialize(param);
-            if (sC.bKey != null)
-                bSend = AES_Encrypt(bSend, sC.bKey);
+            if (sC.eCls != null)
+                bSend = sC.eCls.AES_Encrypt(bSend);
             else
-                bSend = Compress(bSend);
+                bSend = Encryption.Compress(bSend);
 
             sC.cSocket.Send(BitConverter.GetBytes(bSend.Length));
             sC.cSocket.Send(bSend);
@@ -179,65 +180,83 @@ namespace NotLiteCode___Server
 
             byte[] sBuf = new byte[BitConverter.ToInt32(bSize, 0)];
             sC.cSocket.Receive(sBuf);
-            if (sC.bKey != null)
-                sBuf = AES_Decrypt(sBuf, sC.bKey);
+            if (sC.eCls != null)
+                sBuf = sC.eCls.AES_Decrypt(sBuf);
             else
-                sBuf = Decompress(sBuf);
+                sBuf = Encryption.Decompress(sBuf);
 
             return BinaryFormatterSerializer.Deserialize(sBuf);
         }
+    }
 
-        public byte[] AES_Encrypt(byte[] bytesToBeEncrypted, byte[] passwordBytes)
+    public class Encryption
+    {
+        private RNGCryptoServiceProvider cRandom = new RNGCryptoServiceProvider(DateTime.Now.ToString());
+
+        private AesCryptoServiceProvider AES = new AesCryptoServiceProvider();
+
+        private byte[] bKey;
+
+        public Encryption(byte[] key)
+        {
+            bKey = key;
+            AES.KeySize = 256;
+            AES.BlockSize = 128;
+            AES.Mode = CipherMode.CBC;
+        }
+
+        public byte[] AES_Encrypt(byte[] bytesToBeEncrypted)
         {
             object[] oOut = new object[3];
             byte[] bIV = new byte[16];
             cRandom.GetBytes(bIV);
             oOut[0] = bIV;
-            using (AesCryptoServiceProvider AES = new AesCryptoServiceProvider())
+
+            var key = new PasswordDeriveBytes(bKey, oOut[0] as byte[]);
+
+            byte[] bHKey = key.GetBytes(AES.KeySize / 8);
+            byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
+
+            AES.Key = bHKey;
+            AES.IV = bHIV;
+
+            using (var iCT = AES.CreateEncryptor())
             {
-                AES.KeySize = 256;
-                AES.BlockSize = 128;
-                var key = new Rfc2898DeriveBytes(passwordBytes, oOut[0] as byte[], 1000);
-                AES.Mode = CipherMode.CBC;
-                byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-                byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
-                AES.Key = bHKey;
-                AES.IV = bHIV;
-                using (var iCT = AES.CreateEncryptor())
-                {
-                    oOut[2] = iCT.TransformFinalBlock(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
-                }
-                oOut[1] = new HMACSHA256(bHKey).ComputeHash(oOut[2] as byte[]);
+                oOut[2] = iCT.TransformFinalBlock(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
             }
+
+            oOut[1] = new HMACSHA256(bHKey).ComputeHash(oOut[2] as byte[]);
+
             return Compress(BinaryFormatterSerializer.Serialize(oOut));
         }
 
-        public byte[] AES_Decrypt(byte[] bytes, byte[] passwordBytes)
+        public byte[] AES_Decrypt(byte[] bytes)
         {
             byte[] decryptedBytes = null;
             object[] oIn = BinaryFormatterSerializer.Deserialize(Decompress(bytes));
-            using (AesCryptoServiceProvider AES = new AesCryptoServiceProvider())
+
+            var key = new PasswordDeriveBytes(bKey, oIn[0] as byte[]);
+
+            byte[] bHKey = key.GetBytes(AES.KeySize / 8);
+            byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
+
+            AES.Key = bHKey;
+            AES.IV = bHIV;
+
+            if (!new HMACSHA256(bHKey).ComputeHash(oIn[2] as byte[]).SequenceEqual(oIn[1] as byte[]))
+                throw new Exception("Data has been modified! Oracle padding attack? Who cares! Run!");
+
+            byte[] bytesToBeDecrypted = oIn[2] as byte[];
+
+            using (var iCT = AES.CreateDecryptor())
             {
-                AES.KeySize = 256;
-                AES.BlockSize = 128;
-                var key = new Rfc2898DeriveBytes(passwordBytes, oIn[0] as byte[], 1000);
-                AES.Mode = CipherMode.CBC;
-                byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-                byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
-                AES.Key = bHKey;
-                AES.IV = bHIV;
-                if (!new HMACSHA256(bHKey).ComputeHash(oIn[2] as byte[]).SequenceEqual(oIn[1] as byte[]))
-                    throw new Exception("Data has been modified! Oracle padding attack? Who cares! Run!");
-                byte[] bytesToBeDecrypted = oIn[2] as byte[];
-                using (var iCT = AES.CreateDecryptor())
-                {
-                    decryptedBytes = iCT.TransformFinalBlock(bytesToBeDecrypted, 0, bytesToBeDecrypted.Length);
-                }
+                decryptedBytes = iCT.TransformFinalBlock(bytesToBeDecrypted, 0, bytesToBeDecrypted.Length);
             }
+
             return decryptedBytes;
         }
 
-        private byte[] Compress(byte[] input)
+        public static byte[] Compress(byte[] input)
         {
             using (MemoryStream ms = new MemoryStream())
             {
@@ -249,7 +268,7 @@ namespace NotLiteCode___Server
             }
         }
 
-        private byte[] Decompress(byte[] input)
+        public static byte[] Decompress(byte[] input)
         {
             using (MemoryStream decompressed = new MemoryStream())
             {
@@ -285,7 +304,7 @@ namespace NotLiteCode___Server
     {
         public Socket cSocket;
         public SharedClass sCls;
-        public byte[] bKey;
+        public Encryption eCls;
         public byte[] bSize;
     }
 
