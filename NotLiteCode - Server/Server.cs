@@ -1,23 +1,29 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography;
 
 namespace NotLiteCode___Server
 {
+    public static class Headers
+    {
+        public const byte HEADER_CALL = 0x01;
+        public const byte HEADER_RETURN = 0x02;
+        public const byte HEADER_HANDSHAKE = 0x03;
+        public const byte HEADER_MOVE = 0x04;
+    }
+
     public class Server
     {
-        private const string HEADER_CALL = "NLC_CALL";
-        private const string HEADER_RETURN = "NLC_RETURN";
-        private const string HEADER_HANDSHAKE = "NLC_HANDSHAKE";
-        private const string HEADER_MOVE = "NLC_MOVE";
-
         private RNGCryptoServiceProvider cRandom = new RNGCryptoServiceProvider(DateTime.Now.ToString());
+        private List<KeyValuePair<string, MethodInfo>> RemotingMethods = new List<KeyValuePair<string, MethodInfo>>();
         private Socket sSocket = null;
 
         /// <summary>
@@ -50,6 +56,13 @@ namespace NotLiteCode___Server
             sSocket.Bind(new IPEndPoint(IPAddress.Any, iPort));
             sSocket.Listen(iBacklog);
             sSocket.BeginAccept(AcceptCallback, null);
+
+            foreach (MethodInfo mI in typeof(SharedClass).GetMethods())
+            {
+                object[] oAttr = mI.GetCustomAttributes(typeof(NLCCall), false);
+                if (oAttr.Any())
+                    RemotingMethods.Add(new KeyValuePair<string, MethodInfo>((oAttr[0] as NLCCall).Identifier, mI));
+            }
         }
 
         /// <summary>
@@ -93,32 +106,24 @@ namespace NotLiteCode___Server
 
                 cBuffer = AES_Decrypt(cBuffer, sC.bKey);
 
-                object[] oMsg = Formatter.Deserialize<object[]>(cBuffer);
+                object[] oMsg = BinaryFormatterSerializer.Deserialize(cBuffer);
 
-                if (oMsg[0] as string != HEADER_CALL && oMsg[0] as string != HEADER_MOVE) // Check to make sure it's a method call/move
+                if (!oMsg[0].Equals(Headers.HEADER_CALL) && !oMsg[0].Equals(Headers.HEADER_MOVE)) // Check to make sure it's a method call/move
                     throw new Exception("Ahhh it's not a call or move, everyone run!");
 
                 object[] oRet = new object[2];
-                oRet[0] = HEADER_RETURN;
+                oRet[0] = Headers.HEADER_RETURN;
 
                 MethodInfo[] mIA = typeof(SharedClass).GetMethods();
 
-                bool mFound = false;
+                MethodInfo mI = RemotingMethods.Find(x => x.Key == oMsg[1] as string).Value;
 
-                foreach (MethodInfo mI in mIA)
-                    if (mI.GetCustomAttributes(typeof(NLCCall), false).Any())
-                        if (mI.Name == oMsg[1] as string)
-                        {
-                            mFound = true;
-                            object[] mParams = new object[oMsg.Length - 2];
-                            Array.Copy(oMsg, 2, mParams, 0, oMsg.Length - 2);
-                            oRet[1] = mI.Invoke(sC.sCls, mParams);
-                        }
-
-                if (!mFound)
+                if (mI == null)
                     throw new Exception("Client called method that does not exist in Shared Class! (Did you remember the [NLCCall] Attribute?)");
 
-                if (oRet[1] == null && oMsg[0] as string == HEADER_MOVE)
+                oRet[1] = mI.Invoke(sC.sCls, oMsg.Skip(2).Take(oMsg.Length - 2).ToArray());
+
+                if (oRet[1] == null && oMsg[0].Equals(Headers.HEADER_MOVE))
                     Console.WriteLine("Method {0} returned null! Possible mismatch?", oMsg[1] as string);
 
                 Send(sC, oRet);
@@ -139,11 +144,11 @@ namespace NotLiteCode___Server
             CngKey sCngKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP521);
             byte[] sPublic = sCngKey.Export(CngKeyBlobFormat.EccPublicBlob);
 
-            Send(sC, HEADER_HANDSHAKE, sPublic);
+            Send(sC, Headers.HEADER_HANDSHAKE, sPublic);
 
             object[] oRecv = Receive(sC);
 
-            if (oRecv[0] as string != HEADER_HANDSHAKE)
+            if (!oRecv[0].Equals(Headers.HEADER_HANDSHAKE))
                 sC.cSocket.Disconnect(true);
 
             byte[] cBuf = oRecv[1] as byte[];
@@ -157,9 +162,11 @@ namespace NotLiteCode___Server
 
         private void Send(sClient sC, params object[] param)
         {
-            byte[] bSend = Formatter.Serialize(param);
+            byte[] bSend = BinaryFormatterSerializer.Serialize(param);
             if (sC.bKey != null)
                 bSend = AES_Encrypt(bSend, sC.bKey);
+            else
+                bSend = Compress(bSend);
 
             sC.cSocket.Send(BitConverter.GetBytes(bSend.Length));
             sC.cSocket.Send(bSend);
@@ -174,118 +181,62 @@ namespace NotLiteCode___Server
             sC.cSocket.Receive(sBuf);
             if (sC.bKey != null)
                 sBuf = AES_Decrypt(sBuf, sC.bKey);
+            else
+                sBuf = Decompress(sBuf);
 
-            return Formatter.Deserialize<object[]>(sBuf);
+            return BinaryFormatterSerializer.Deserialize(sBuf);
         }
 
         public byte[] AES_Encrypt(byte[] bytesToBeEncrypted, byte[] passwordBytes)
+        // Generic AES 256 class from StackOverFlow, modified to have random IV/Salt
         {
-            byte[] encryptedBytes = null;
-
-            byte[] saltBytes = new byte[16];
-            cRandom.GetBytes(saltBytes);
-
-            using (MemoryStream ms = new MemoryStream())
+            object[] oOut = new object[3];
+            byte[] counter = new byte[16];
+            cRandom.GetBytes(counter);
+            oOut[0] = counter;
+            using (AesManaged AES = new AesManaged())
             {
-                using (RijndaelManaged AES = new RijndaelManaged())
+                AES.KeySize = 256;
+                AES.BlockSize = 128;
+                var key = new Rfc2898DeriveBytes(passwordBytes, oOut[0] as byte[], 1000);
+                AES.Mode = CipherMode.ECB;
+                AES.Padding = PaddingMode.None;
+                byte[] bHKey = key.GetBytes(AES.KeySize / 8);
+                byte[] bHCounter = key.GetBytes(AES.BlockSize / 8);
+                using (var cs = new CounterModeCryptoTransform(AES, bHKey, bHCounter))
                 {
-                    AES.KeySize = 256;
-                    AES.BlockSize = 128;
-
-                    var key = new Rfc2898DeriveBytes(passwordBytes, saltBytes, 1000);
-                    AES.Key = key.GetBytes(AES.KeySize / 8);
-                    AES.IV = key.GetBytes(AES.BlockSize / 8);
-
-                    AES.Mode = CipherMode.CBC;
-
-                    using (var cs = new CryptoStream(ms, AES.CreateEncryptor(), CryptoStreamMode.Write))
-                    {
-                        cs.Write(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
-                        cs.Close();
-                    }
-                    encryptedBytes = ms.ToArray();
+                    oOut[2] = cs.TransformFinalBlock(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
                 }
+                oOut[1] = new HMACSHA256(bHKey).ComputeHash(oOut[2] as byte[]);
             }
-
-            return encryptedBytes.Concat(saltBytes).ToArray();
+            return Compress(BinaryFormatterSerializer.Serialize(oOut));
         }
 
         public byte[] AES_Decrypt(byte[] bytes, byte[] passwordBytes)
         {
             byte[] decryptedBytes = null;
-            byte[] bytesToBeDecrypted = new byte[bytes.Length - 16];
-
-            byte[] saltBytes = new byte[16];
-
-            Array.Copy(bytes, bytes.Length - 16, saltBytes, 0, 16);
-            Array.Copy(bytes, bytesToBeDecrypted, bytes.Length - 16);
-
-            using (MemoryStream ms = new MemoryStream())
+            object[] oIn = BinaryFormatterSerializer.Deserialize(Decompress(bytes));
+            using (AesManaged AES = new AesManaged())
             {
-                using (RijndaelManaged AES = new RijndaelManaged())
+                AES.KeySize = 256;
+                AES.BlockSize = 128;
+                var key = new Rfc2898DeriveBytes(passwordBytes, oIn[0] as byte[], 1000);
+                AES.Mode = CipherMode.ECB;
+                AES.Padding = PaddingMode.None;
+                byte[] bHKey = key.GetBytes(AES.KeySize / 8);
+                byte[] bHCounter = key.GetBytes(AES.BlockSize / 8);
+                if (!new HMACSHA256(bHKey).ComputeHash(oIn[2] as byte[]).SequenceEqual(oIn[1] as byte[]))
+                    throw new Exception("Data has been modified! Oracle padding attack? Who cares! Run!");
+                byte[] bytesToBeDecrypted = oIn[2] as byte[];
+                using (var cs = new CounterModeCryptoTransform(AES, bHKey, bHCounter))
                 {
-                    AES.KeySize = 256;
-                    AES.BlockSize = 128;
-
-                    var key = new Rfc2898DeriveBytes(passwordBytes, saltBytes, 1000);
-                    AES.Key = key.GetBytes(AES.KeySize / 8);
-                    AES.IV = key.GetBytes(AES.BlockSize / 8);
-
-                    AES.Mode = CipherMode.CBC;
-
-                    using (var cs = new CryptoStream(ms, AES.CreateDecryptor(), CryptoStreamMode.Write))
-                    {
-                        cs.Write(bytesToBeDecrypted, 0, bytesToBeDecrypted.Length);
-                        cs.Close();
-                    }
-                    decryptedBytes = ms.ToArray();
+                    decryptedBytes = cs.TransformFinalBlock(bytesToBeDecrypted, 0, bytesToBeDecrypted.Length);
                 }
             }
-
             return decryptedBytes;
         }
-    }
 
-    [AttributeUsage(AttributeTargets.Method)]
-    public class NLCCall : Attribute { }
-
-    public struct sClient
-    {
-        public Socket cSocket;
-        public SharedClass sCls;
-        public byte[] bKey;
-        public byte[] bSize;
-    }
-
-    public static class Formatter
-    {
-        public static byte[] Serialize(object input)
-        {
-            BinaryFormatter bf = new BinaryFormatter();
-            using (MemoryStream ms = new MemoryStream())
-            {
-                bf.Serialize(ms, input);
-                return Compress(ms.ToArray());
-            }
-        }
-
-        public static t Deserialize<t>(byte[] input)
-        {
-            try
-            {
-                BinaryFormatter bf = new BinaryFormatter();
-                using (MemoryStream ms = new MemoryStream(Decompress(input)))
-                {
-                    return (t)bf.Deserialize(ms);
-                }
-            }
-            catch
-            {
-                return default(t);
-            }
-        }
-
-        public static byte[] Compress(byte[] input)
+        private byte[] Compress(byte[] input)
         {
             using (MemoryStream ms = new MemoryStream())
             {
@@ -297,7 +248,7 @@ namespace NotLiteCode___Server
             }
         }
 
-        public static byte[] Decompress(byte[] input)
+        private byte[] Decompress(byte[] input)
         {
             using (MemoryStream decompressed = new MemoryStream())
             {
@@ -314,6 +265,146 @@ namespace NotLiteCode___Server
                     }
                     return decompressed.ToArray();
                 }
+            }
+        }
+    }
+
+    public class CounterModeCryptoTransform : ICryptoTransform
+    {
+        private readonly byte[] _counter;
+        private readonly ICryptoTransform _counterEncryptor;
+        private readonly Queue<byte> _xorMask = new Queue<byte>();
+        private readonly SymmetricAlgorithm _symmetricAlgorithm;
+
+        public CounterModeCryptoTransform(SymmetricAlgorithm symmetricAlgorithm, byte[] key, byte[] counter)
+        {
+            if (symmetricAlgorithm == null) throw new ArgumentNullException("symmetricAlgorithm");
+            if (key == null) throw new ArgumentNullException("key");
+            if (counter == null) throw new ArgumentNullException("counter");
+            if (counter.Length != symmetricAlgorithm.BlockSize / 8)
+                throw new ArgumentException(String.Format("Counter size must be same as block size (actual: {0}, expected: {1})",
+                    counter.Length, symmetricAlgorithm.BlockSize / 8));
+
+            _symmetricAlgorithm = symmetricAlgorithm;
+            _counter = counter;
+
+            var zeroIv = new byte[_symmetricAlgorithm.BlockSize / 8];
+            _counterEncryptor = symmetricAlgorithm.CreateEncryptor(key, zeroIv);
+        }
+
+        public byte[] TransformFinalBlock(byte[] inputBuffer, int inputOffset, int inputCount)
+        {
+            var output = new byte[inputCount];
+            TransformBlock(inputBuffer, inputOffset, inputCount, output, 0);
+            return output;
+        }
+
+        public int TransformBlock(byte[] inputBuffer, int inputOffset, int inputCount, byte[] outputBuffer, int outputOffset)
+        {
+            for (var i = 0; i < inputCount; i++)
+            {
+                if (NeedMoreXorMaskBytes()) EncryptCounterThenIncrement();
+
+                var mask = _xorMask.Dequeue();
+                outputBuffer[outputOffset + i] = (byte)(inputBuffer[inputOffset + i] ^ mask);
+            }
+
+            return inputCount;
+        }
+
+        private bool NeedMoreXorMaskBytes()
+        {
+            return _xorMask.Count() == 0;
+        }
+
+        private void EncryptCounterThenIncrement()
+        {
+            var counterModeBlock = new byte[_symmetricAlgorithm.BlockSize / 8];
+
+            _counterEncryptor.TransformBlock(_counter, 0, _counter.Length, counterModeBlock, 0);
+            IncrementCounter();
+
+            foreach (var b in counterModeBlock)
+            {
+                _xorMask.Enqueue(b);
+            }
+        }
+
+        private void IncrementCounter()
+        {
+            for (var i = _counter.Length - 1; i >= 0; i--)
+            {
+                if (++_counter[i] != 0)
+                    break;
+            }
+        }
+
+        public int InputBlockSize { get { return _symmetricAlgorithm.BlockSize / 8; } }
+        public int OutputBlockSize { get { return _symmetricAlgorithm.BlockSize / 8; } }
+        public bool CanTransformMultipleBlocks { get { return true; } }
+        public bool CanReuseTransform { get { return false; } }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Method)]
+    public class NLCCall : Attribute
+    {
+        public readonly string Identifier;
+
+        public NLCCall(string Identifier)
+        {
+            this.Identifier = Identifier;
+        }
+    }
+
+    public struct sClient
+    {
+        public Socket cSocket;
+        public SharedClass sCls;
+        public byte[] bKey;
+        public byte[] bSize;
+    }
+
+    public static class BinaryFormatterSerializer
+    {
+        public static byte[] Serialize(object Message)
+        {
+            using (MemoryStream stream = new MemoryStream())
+            {
+                BinaryFormatter bf = new BinaryFormatter();
+                bf.Binder = new DeserializationBinder();
+                bf.Serialize(stream, Message);
+                return stream.ToArray();
+            }
+        }
+
+        public static object[] Deserialize(byte[] MessageData)
+        {
+            using (MemoryStream stream = new MemoryStream(MessageData))
+            {
+                BinaryFormatter bf = new BinaryFormatter();
+                bf.Binder = new DeserializationBinder();
+                return bf.Deserialize(stream) as object[];
+            }
+        }
+
+        private sealed class DeserializationBinder : SerializationBinder
+        {
+            public override Type BindToType(string assemblyName, string typeName)
+            {
+                Type typeToDeserialize = null;
+
+                // For each assemblyName/typeName that you want to deserialize to
+                // a different type, set typeToDeserialize to the desired type.
+                String exeAssembly = Assembly.GetExecutingAssembly().FullName;
+
+                // The following line of code returns the type.
+                typeToDeserialize = Type.GetType(String.Format("{0}, {1}", typeName, exeAssembly));
+
+                return typeToDeserialize;
             }
         }
     }

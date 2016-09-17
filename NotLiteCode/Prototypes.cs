@@ -5,7 +5,9 @@
     public interface Prototypes
     {
         void Test();
+
         string CombineTwoStringsAndReturn(string s1, string s2);
+
         void SpeedTest();
     }
 }
