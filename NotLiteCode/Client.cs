@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -174,31 +173,33 @@ namespace NotLiteCode
         }
 
         public byte[] AES_Encrypt(byte[] bytesToBeEncrypted, byte[] passwordBytes)
-        // Generic AES 256 class from StackOverFlow, modified to have random IV/Salt
         {
             object[] oOut = new object[3];
-            byte[] counter = new byte[16];
-            cRandom.GetBytes(counter);
+            byte[] bIV = new byte[16];
+            cRandom.GetBytes(bIV);
 
-            oOut[0] = counter;
+            oOut[0] = bIV;
 
-            using (AesManaged AES = new AesManaged())
+            using (AesCryptoServiceProvider AES = new AesCryptoServiceProvider())
             {
                 AES.KeySize = 256;
                 AES.BlockSize = 128;
 
                 var key = new Rfc2898DeriveBytes(passwordBytes, oOut[0] as byte[], 1000);
 
-                AES.Mode = CipherMode.ECB;
-                AES.Padding = PaddingMode.None;
+                AES.Mode = CipherMode.CBC;
 
                 byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-                byte[] bHCounter = key.GetBytes(AES.BlockSize / 8);
+                byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
 
-                using (var cs = new CounterModeCryptoTransform(AES, bHKey, bHCounter))
+                AES.Key = bHKey;
+                AES.IV = bHIV;
+
+                using (var iCT = AES.CreateEncryptor())
                 {
-                    oOut[2] = cs.TransformFinalBlock(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
+                    oOut[2] = iCT.TransformFinalBlock(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
                 }
+
                 oOut[1] = new HMACSHA256(bHKey).ComputeHash(oOut[2] as byte[]);
             }
 
@@ -210,27 +211,29 @@ namespace NotLiteCode
             byte[] decryptedBytes = null;
             object[] oIn = BinaryFormatterSerializer.Deserialize(Decompress(bytes));
 
-            using (AesManaged AES = new AesManaged())
+            using (AesCryptoServiceProvider AES = new AesCryptoServiceProvider())
             {
                 AES.KeySize = 256;
                 AES.BlockSize = 128;
 
                 var key = new Rfc2898DeriveBytes(passwordBytes, oIn[0] as byte[], 1000);
 
-                AES.Mode = CipherMode.ECB;
-                AES.Padding = PaddingMode.None;
+                AES.Mode = CipherMode.CBC;
 
                 byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-                byte[] bHCounter = key.GetBytes(AES.BlockSize / 8);
+                byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
+
+                AES.Key = bHKey;
+                AES.IV = bHIV;
 
                 if (!new HMACSHA256(bHKey).ComputeHash(oIn[2] as byte[]).SequenceEqual(oIn[1] as byte[]))
                     throw new Exception("Data has been modified! Oracle padding attack? Who cares! Run!");
 
                 byte[] bytesToBeDecrypted = oIn[2] as byte[];
 
-                using (var cs = new CounterModeCryptoTransform(AES, bHKey, bHCounter))
+                using (var iCT = AES.CreateDecryptor())
                 {
-                    decryptedBytes = cs.TransformFinalBlock(bytesToBeDecrypted, 0, bytesToBeDecrypted.Length);
+                    decryptedBytes = iCT.TransformFinalBlock(bytesToBeDecrypted, 0, bytesToBeDecrypted.Length);
                 }
             }
 
@@ -267,86 +270,6 @@ namespace NotLiteCode
                     return decompressed.ToArray();
                 }
             }
-        }
-    }
-
-    public class CounterModeCryptoTransform : ICryptoTransform
-    {
-        private readonly byte[] _counter;
-        private readonly ICryptoTransform _counterEncryptor;
-        private readonly Queue<byte> _xorMask = new Queue<byte>();
-        private readonly SymmetricAlgorithm _symmetricAlgorithm;
-
-        public CounterModeCryptoTransform(SymmetricAlgorithm symmetricAlgorithm, byte[] key, byte[] counter)
-        {
-            if (symmetricAlgorithm == null) throw new ArgumentNullException("symmetricAlgorithm");
-            if (key == null) throw new ArgumentNullException("key");
-            if (counter == null) throw new ArgumentNullException("counter");
-            if (counter.Length != symmetricAlgorithm.BlockSize / 8)
-                throw new ArgumentException(String.Format("Counter size must be same as block size (actual: {0}, expected: {1})",
-                    counter.Length, symmetricAlgorithm.BlockSize / 8));
-
-            _symmetricAlgorithm = symmetricAlgorithm;
-            _counter = counter;
-
-            var zeroIv = new byte[_symmetricAlgorithm.BlockSize / 8];
-            _counterEncryptor = symmetricAlgorithm.CreateEncryptor(key, zeroIv);
-        }
-
-        public byte[] TransformFinalBlock(byte[] inputBuffer, int inputOffset, int inputCount)
-        {
-            var output = new byte[inputCount];
-            TransformBlock(inputBuffer, inputOffset, inputCount, output, 0);
-            return output;
-        }
-
-        public int TransformBlock(byte[] inputBuffer, int inputOffset, int inputCount, byte[] outputBuffer, int outputOffset)
-        {
-            for (var i = 0; i < inputCount; i++)
-            {
-                if (NeedMoreXorMaskBytes()) EncryptCounterThenIncrement();
-
-                var mask = _xorMask.Dequeue();
-                outputBuffer[outputOffset + i] = (byte)(inputBuffer[inputOffset + i] ^ mask);
-            }
-
-            return inputCount;
-        }
-
-        private bool NeedMoreXorMaskBytes()
-        {
-            return _xorMask.Count() == 0;
-        }
-
-        private void EncryptCounterThenIncrement()
-        {
-            var counterModeBlock = new byte[_symmetricAlgorithm.BlockSize / 8];
-
-            _counterEncryptor.TransformBlock(_counter, 0, _counter.Length, counterModeBlock, 0);
-            IncrementCounter();
-
-            foreach (var b in counterModeBlock)
-            {
-                _xorMask.Enqueue(b);
-            }
-        }
-
-        private void IncrementCounter()
-        {
-            for (var i = _counter.Length - 1; i >= 0; i--)
-            {
-                if (++_counter[i] != 0)
-                    break;
-            }
-        }
-
-        public int InputBlockSize { get { return _symmetricAlgorithm.BlockSize / 8; } }
-        public int OutputBlockSize { get { return _symmetricAlgorithm.BlockSize / 8; } }
-        public bool CanTransformMultipleBlocks { get { return true; } }
-        public bool CanReuseTransform { get { return false; } }
-
-        public void Dispose()
-        {
         }
     }
 
