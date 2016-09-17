@@ -9,10 +9,14 @@ namespace NotLiteCode
         {
             Console.Title = "NLC Client";
             Client client = new Client();
+            client.bDebugLog = true;
             client.Start();
             client.Test();
+
             Console.WriteLine(client.CombineTwoStringsAndReturn("I'm a ", "real boy!"));
 
+            // Console will get spammed since we're calling the server 1k+ times in just a second, and it can effect speed.
+            client.bDebugLog = false;
             int l = 0;
             Stopwatch t = new Stopwatch();
             t.Start();

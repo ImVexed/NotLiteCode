@@ -1,13 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography;
 
 namespace NotLiteCode___Server
@@ -26,6 +22,8 @@ namespace NotLiteCode___Server
         private List<KeyValuePair<string, MethodInfo>> RemotingMethods = new List<KeyValuePair<string, MethodInfo>>();
         private Socket sSocket = null;
 
+        #region Variables
+
         /// <summary>
         /// Port for the server to listen on, changing this variable while the server is running will have no effect.
         /// </summary>
@@ -35,6 +33,13 @@ namespace NotLiteCode___Server
         /// The number of maximum pending connections in queue.
         /// </summary>
         public int iBacklog { get; set; }
+
+        /// <summary>
+        /// If true, debugging information will be output to the console.
+        /// </summary>
+        public bool bDebugLog { get; set; } = false;
+
+        #endregion Variables
 
         /// <summary>
         /// Initializes the NLC Server. Credits to Killpot :^)
@@ -55,13 +60,25 @@ namespace NotLiteCode___Server
         {
             sSocket.Bind(new IPEndPoint(IPAddress.Any, iPort));
             sSocket.Listen(iBacklog);
+
+            Log("Server started!", ConsoleColor.Green);
+
             sSocket.BeginAccept(AcceptCallback, null);
 
             foreach (MethodInfo mI in typeof(SharedClass).GetMethods())
             {
                 object[] oAttr = mI.GetCustomAttributes(typeof(NLCCall), false);
+
                 if (oAttr.Any())
-                    RemotingMethods.Add(new KeyValuePair<string, MethodInfo>((oAttr[0] as NLCCall).Identifier, mI));
+                {
+                    NLCCall thisAttr = oAttr[0] as NLCCall;
+
+                    if (RemotingMethods.Where(x => x.Key == thisAttr.Identifier).Any())
+                        throw new Exception("There are more than one function inside the SharedClass with the same Identifier!");
+
+                    Log(String.Format("Identifier {0} MethodInfo link created...", thisAttr.Identifier), ConsoleColor.Green);
+                    RemotingMethods.Add(new KeyValuePair<string, MethodInfo>(thisAttr.Identifier, mI));
+                }
             }
         }
 
@@ -80,7 +97,7 @@ namespace NotLiteCode___Server
         //Our method for accepting clients
         {
             Socket client = sSocket.EndAccept(iAR);
-            Console.WriteLine("Client connected!");
+            Log(String.Format("Client connected from IP: {0}", client.RemoteEndPoint.ToString()), ConsoleColor.Green);
 
             sClient sC = new sClient();
             sC.cSocket = client;
@@ -105,6 +122,8 @@ namespace NotLiteCode___Server
 
                 sC.cSocket.Receive(cBuffer);
 
+                Log(String.Format("Receiving {0} bytes...", cBuffer.Length), ConsoleColor.Cyan);
+
                 cBuffer = sC.eCls.AES_Decrypt(cBuffer);
 
                 object[] oMsg = BinaryFormatterSerializer.Deserialize(cBuffer);
@@ -124,10 +143,12 @@ namespace NotLiteCode___Server
 
                 oRet[1] = mI.Invoke(sC.sCls, oMsg.Skip(2).Take(oMsg.Length - 2).ToArray());
 
+                Log(String.Format("Client IP: {0} called Remote Identifier: {1}", sC.cSocket.RemoteEndPoint.ToString(), oMsg[1] as string), ConsoleColor.Cyan);
+
                 if (oRet[1] == null && oMsg[0].Equals(Headers.HEADER_MOVE))
                     Console.WriteLine("Method {0} returned null! Possible mismatch?", oMsg[1] as string);
 
-                Send(sC, oRet);
+                BlockingSend(sC, oRet);
             }
             catch (Exception ex)
             {
@@ -145,9 +166,9 @@ namespace NotLiteCode___Server
             CngKey sCngKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP521);
             byte[] sPublic = sCngKey.Export(CngKeyBlobFormat.EccPublicBlob);
 
-            Send(sC, Headers.HEADER_HANDSHAKE, sPublic);
+            BlockingSend(sC, Headers.HEADER_HANDSHAKE, sPublic);
 
-            object[] oRecv = Receive(sC);
+            object[] oRecv = BlockingReceive(sC);
 
             if (!oRecv[0].Equals(Headers.HEADER_HANDSHAKE))
                 sC.cSocket.Disconnect(true);
@@ -161,7 +182,7 @@ namespace NotLiteCode___Server
             sC.eCls = new Encryption(sSymKey);
         }
 
-        private void Send(sClient sC, params object[] param)
+        private void BlockingSend(sClient sC, params object[] param)
         {
             byte[] bSend = BinaryFormatterSerializer.Serialize(param);
             if (sC.eCls != null)
@@ -169,17 +190,22 @@ namespace NotLiteCode___Server
             else
                 bSend = Encryption.Compress(bSend);
 
+            Log(String.Format("Sending {0} bytes...", bSend.Length), ConsoleColor.Cyan);
+
             sC.cSocket.Send(BitConverter.GetBytes(bSend.Length));
             sC.cSocket.Send(bSend);
         }
 
-        private object[] Receive(sClient sC)
+        private object[] BlockingReceive(sClient sC)
         {
             byte[] bSize = new byte[4];
             sC.cSocket.Receive(bSize);
 
             byte[] sBuf = new byte[BitConverter.ToInt32(bSize, 0)];
             sC.cSocket.Receive(sBuf);
+
+            Log(String.Format("Receiving {0} bytes...", sBuf.Length), ConsoleColor.Cyan);
+
             if (sC.eCls != null)
                 sBuf = sC.eCls.AES_Decrypt(sBuf);
             else
@@ -187,105 +213,17 @@ namespace NotLiteCode___Server
 
             return BinaryFormatterSerializer.Deserialize(sBuf);
         }
-    }
 
-    public class Encryption
-    {
-        private RNGCryptoServiceProvider cRandom = new RNGCryptoServiceProvider(DateTime.Now.ToString());
-
-        private AesCryptoServiceProvider AES = new AesCryptoServiceProvider();
-
-        private byte[] bKey;
-
-        public Encryption(byte[] key)
+        private void Log(string message, ConsoleColor color = ConsoleColor.Gray)
         {
-            bKey = key;
-            AES.KeySize = 256;
-            AES.BlockSize = 128;
-            AES.Mode = CipherMode.CBC;
-        }
+            if (!bDebugLog)
+                return;
 
-        public byte[] AES_Encrypt(byte[] bytesToBeEncrypted)
-        {
-            object[] oOut = new object[3];
-            byte[] bIV = new byte[16];
-            cRandom.GetBytes(bIV);
-            oOut[0] = bIV;
-
-            var key = new PasswordDeriveBytes(bKey, oOut[0] as byte[]);
-
-            byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-            byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
-
-            AES.Key = bHKey;
-            AES.IV = bHIV;
-
-            using (var iCT = AES.CreateEncryptor())
-            {
-                oOut[2] = iCT.TransformFinalBlock(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
-            }
-
-            oOut[1] = new HMACSHA256(bHKey).ComputeHash(oOut[2] as byte[]);
-
-            return Compress(BinaryFormatterSerializer.Serialize(oOut));
-        }
-
-        public byte[] AES_Decrypt(byte[] bytes)
-        {
-            byte[] decryptedBytes = null;
-            object[] oIn = BinaryFormatterSerializer.Deserialize(Decompress(bytes));
-
-            var key = new PasswordDeriveBytes(bKey, oIn[0] as byte[]);
-
-            byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-            byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
-
-            AES.Key = bHKey;
-            AES.IV = bHIV;
-
-            if (!new HMACSHA256(bHKey).ComputeHash(oIn[2] as byte[]).SequenceEqual(oIn[1] as byte[]))
-                throw new Exception("Data has been modified! Oracle padding attack? Who cares! Run!");
-
-            byte[] bytesToBeDecrypted = oIn[2] as byte[];
-
-            using (var iCT = AES.CreateDecryptor())
-            {
-                decryptedBytes = iCT.TransformFinalBlock(bytesToBeDecrypted, 0, bytesToBeDecrypted.Length);
-            }
-
-            return decryptedBytes;
-        }
-
-        public static byte[] Compress(byte[] input)
-        {
-            using (MemoryStream ms = new MemoryStream())
-            {
-                using (GZipStream _gz = new GZipStream(ms, CompressionMode.Compress))
-                {
-                    _gz.Write(input, 0, input.Length);
-                }
-                return ms.ToArray();
-            }
-        }
-
-        public static byte[] Decompress(byte[] input)
-        {
-            using (MemoryStream decompressed = new MemoryStream())
-            {
-                using (MemoryStream ms = new MemoryStream(input))
-                {
-                    using (GZipStream _gz = new GZipStream(ms, CompressionMode.Decompress))
-                    {
-                        byte[] Bytebuffer = new byte[1024];
-                        int bytesRead = 0;
-                        while ((bytesRead = _gz.Read(Bytebuffer, 0, Bytebuffer.Length)) > 0)
-                        {
-                            decompressed.Write(Bytebuffer, 0, bytesRead);
-                        }
-                    }
-                    return decompressed.ToArray();
-                }
-            }
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.Write("[{0}] ", DateTime.Now.ToLongTimeString());
+            Console.ForegroundColor = color;
+            Console.Write("{0}{1}", message, Environment.NewLine);
+            Console.ResetColor();
         }
     }
 
@@ -306,46 +244,5 @@ namespace NotLiteCode___Server
         public SharedClass sCls;
         public Encryption eCls;
         public byte[] bSize;
-    }
-
-    public static class BinaryFormatterSerializer
-    {
-        public static byte[] Serialize(object Message)
-        {
-            using (MemoryStream stream = new MemoryStream())
-            {
-                BinaryFormatter bf = new BinaryFormatter();
-                bf.Binder = new DeserializationBinder();
-                bf.Serialize(stream, Message);
-                return stream.ToArray();
-            }
-        }
-
-        public static object[] Deserialize(byte[] MessageData)
-        {
-            using (MemoryStream stream = new MemoryStream(MessageData))
-            {
-                BinaryFormatter bf = new BinaryFormatter();
-                bf.Binder = new DeserializationBinder();
-                return bf.Deserialize(stream) as object[];
-            }
-        }
-
-        private sealed class DeserializationBinder : SerializationBinder
-        {
-            public override Type BindToType(string assemblyName, string typeName)
-            {
-                Type typeToDeserialize = null;
-
-                // For each assemblyName/typeName that you want to deserialize to
-                // a different type, set typeToDeserialize to the desired type.
-                String exeAssembly = Assembly.GetExecutingAssembly().FullName;
-
-                // The following line of code returns the type.
-                typeToDeserialize = Type.GetType(String.Format("{0}, {1}", typeName, exeAssembly));
-
-                return typeToDeserialize;
-            }
-        }
     }
 }

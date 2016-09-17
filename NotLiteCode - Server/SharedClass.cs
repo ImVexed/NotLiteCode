@@ -15,6 +15,7 @@ namespace NotLiteCode___Server
         public void Test()
         {
             Console.Write("Hey! The client invoked me!");
+            Program.server.bDebugLog = false; // We're about to do a speed test after this message, and outputting all the info will effect the speed severely
         }
 
         [NLCCall("Sanic")]

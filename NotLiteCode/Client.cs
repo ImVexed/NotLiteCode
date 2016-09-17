@@ -1,11 +1,5 @@
 ﻿using System;
-using System.IO;
-using System.IO.Compression;
-using System.Linq;
 using System.Net.Sockets;
-using System.Reflection;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography;
 
 namespace NotLiteCode
@@ -35,6 +29,11 @@ namespace NotLiteCode
         /// IP for the client to connect, changing this variable while the client is connected will have no effect.
         /// </summary>
         public string sIP { get; set; }
+
+        /// <summary>
+        /// If true, debugging information will be output to the console.
+        /// </summary>
+        public bool bDebugLog { get; set; } = false;
 
         #endregion Variables
 
@@ -70,6 +69,7 @@ namespace NotLiteCode
         public void Start()
         {
             cS.Connect(sIP, iPort);
+            Log("Successfully connected to server!", ConsoleColor.Green);
             OnConnect();
         }
 
@@ -94,7 +94,7 @@ namespace NotLiteCode
             CngKey cCngKey = CngKey.Create(CngAlgorithm.ECDiffieHellmanP521);
             byte[] cPublic = cCngKey.Export(CngKeyBlobFormat.EccPublicBlob);
 
-            object[] oRecv = receive();
+            object[] oRecv = BlockingReceive();
             if (!oRecv[0].Equals(Headers.HEADER_HANDSHAKE)) // Sanity check
                 throw new Exception("Unexpected error");
 
@@ -104,18 +104,22 @@ namespace NotLiteCode
             using (CngKey sPubKey = CngKey.Import(sBuf, CngKeyBlobFormat.EccPublicBlob))
                 bKeyTemp = cAlgo.DeriveKeyMaterial(sPubKey);
 
-            send(Headers.HEADER_HANDSHAKE, cPublic);
+            BlockingSend(Headers.HEADER_HANDSHAKE, cPublic);
+
+            Log(String.Format("Handshake complete, key length: {0}", bKeyTemp.Length), ConsoleColor.Green);
+
             eCls = new Encryption(bKeyTemp);
         }
 
-        public T RemoteCall<T>(string identifier, params object[] param)
+        private T RemoteCall<T>(string identifier, params object[] param)
         {
             object[] payload = new object[param.Length + 2]; // +2 for header & method name
             payload[0] = Headers.HEADER_MOVE;
             payload[1] = identifier;
             Array.Copy(param, 0, payload, 2, param.Length);
-            send(payload);
-            object[] oRecv = receive();
+            Log(String.Format("Calling remote method: {0}", identifier), ConsoleColor.Cyan);
+            BlockingSend(payload);
+            object[] oRecv = BlockingReceive();
 
             if (!oRecv[0].Equals(Headers.HEADER_RETURN))
                 throw new Exception("Unexpected error");
@@ -123,20 +127,21 @@ namespace NotLiteCode
             return (T)oRecv[1];
         }
 
-        public void RemoteCall(string identifier, params object[] param)
+        private void RemoteCall(string identifier, params object[] param)
         {
             object[] payload = new object[param.Length + 2]; // +2 for header & method name
             payload[0] = Headers.HEADER_CALL;
             payload[1] = identifier;
             Array.Copy(param, 0, payload, 2, param.Length);
-            send(payload);
-            object[] oRecv = receive();
+            Log(String.Format("Calling remote method: {0}", identifier), ConsoleColor.Cyan);
+            BlockingSend(payload);
+            object[] oRecv = BlockingReceive();
 
             if (!oRecv[0].Equals(Headers.HEADER_RETURN))
                 throw new Exception("Unexpected error");
         }
 
-        private object[] receive()
+        private object[] BlockingReceive()
         {
             byte[] bSize = new byte[4];
             cS.Receive(bSize);
@@ -147,6 +152,8 @@ namespace NotLiteCode
             if (sBuf.Length <= 0)
                 throw new Exception("Invalid data length, did the server force disconnect you?");
 
+            Log(String.Format("Receiving {0} bytes...", sBuf.Length), ConsoleColor.Cyan);
+
             if (eCls != null)
                 sBuf = eCls.AES_Decrypt(sBuf);
             else
@@ -155,7 +162,7 @@ namespace NotLiteCode
             return BinaryFormatterSerializer.Deserialize(sBuf);
         }
 
-        private void send(params object[] param)
+        private void BlockingSend(params object[] param)
         {
             byte[] bSend = BinaryFormatterSerializer.Serialize(param);
 
@@ -163,150 +170,21 @@ namespace NotLiteCode
                 bSend = eCls.AES_Encrypt(bSend);
             else
                 bSend = Encryption.Compress(bSend);
-
+            Log(String.Format("Sending {0} bytes...", bSend.Length), ConsoleColor.Cyan);
             cS.Send(BitConverter.GetBytes(bSend.Length)); // Send expected payload length, gets bytes of int representing size, will always be 4 bytes for Int32
             cS.Send(bSend);
         }
-    }
 
-    public class Encryption
-    {
-        private RNGCryptoServiceProvider cRandom = new RNGCryptoServiceProvider(DateTime.Now.ToString());
-
-        private AesCryptoServiceProvider AES = new AesCryptoServiceProvider();
-
-        private byte[] bKey;
-
-        public Encryption(byte[] key)
+        private void Log(string message, ConsoleColor color = ConsoleColor.Gray)
         {
-            bKey = key;
-            AES.KeySize = 256;
-            AES.BlockSize = 128;
-            AES.Mode = CipherMode.CBC;
-        }
+            if (!bDebugLog)
+                return;
 
-        public byte[] AES_Encrypt(byte[] bytesToBeEncrypted)
-        {
-            object[] oOut = new object[3];
-            byte[] bIV = new byte[16];
-            cRandom.GetBytes(bIV);
-            oOut[0] = bIV;
-
-            var key = new PasswordDeriveBytes(bKey, oOut[0] as byte[]);
-
-            byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-            byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
-
-            AES.Key = bHKey;
-            AES.IV = bHIV;
-
-            using (var iCT = AES.CreateEncryptor())
-            {
-                oOut[2] = iCT.TransformFinalBlock(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
-            }
-
-            oOut[1] = new HMACSHA256(bHKey).ComputeHash(oOut[2] as byte[]);
-
-            return Compress(BinaryFormatterSerializer.Serialize(oOut));
-        }
-
-        public byte[] AES_Decrypt(byte[] bytes)
-        {
-            byte[] decryptedBytes = null;
-            object[] oIn = BinaryFormatterSerializer.Deserialize(Decompress(bytes));
-
-            var key = new PasswordDeriveBytes(bKey, oIn[0] as byte[]);
-
-            byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-            byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
-
-            AES.Key = bHKey;
-            AES.IV = bHIV;
-
-            if (!new HMACSHA256(bHKey).ComputeHash(oIn[2] as byte[]).SequenceEqual(oIn[1] as byte[]))
-                throw new Exception("Data has been modified! Oracle padding attack? Who cares! Run!");
-
-            byte[] bytesToBeDecrypted = oIn[2] as byte[];
-
-            using (var iCT = AES.CreateDecryptor())
-            {
-                decryptedBytes = iCT.TransformFinalBlock(bytesToBeDecrypted, 0, bytesToBeDecrypted.Length);
-            }
-
-            return decryptedBytes;
-        }
-
-        public static byte[] Compress(byte[] input)
-        {
-            using (MemoryStream ms = new MemoryStream())
-            {
-                using (GZipStream _gz = new GZipStream(ms, CompressionMode.Compress))
-                {
-                    _gz.Write(input, 0, input.Length);
-                }
-                return ms.ToArray();
-            }
-        }
-
-        public static byte[] Decompress(byte[] input)
-        {
-            using (MemoryStream decompressed = new MemoryStream())
-            {
-                using (MemoryStream ms = new MemoryStream(input))
-                {
-                    using (GZipStream _gz = new GZipStream(ms, CompressionMode.Decompress))
-                    {
-                        byte[] Bytebuffer = new byte[1024];
-                        int bytesRead = 0;
-                        while ((bytesRead = _gz.Read(Bytebuffer, 0, Bytebuffer.Length)) > 0)
-                        {
-                            decompressed.Write(Bytebuffer, 0, bytesRead);
-                        }
-                    }
-                    return decompressed.ToArray();
-                }
-            }
-        }
-    }
-
-    public static class BinaryFormatterSerializer
-    {
-        public static byte[] Serialize(object Message)
-        {
-            using (MemoryStream stream = new MemoryStream())
-            {
-                BinaryFormatter bf = new BinaryFormatter();
-                bf.Binder = new DeserializationBinder();
-                bf.Serialize(stream, Message);
-                return stream.ToArray();
-            }
-        }
-
-        public static object[] Deserialize(byte[] MessageData)
-        {
-            using (MemoryStream stream = new MemoryStream(MessageData))
-            {
-                BinaryFormatter bf = new BinaryFormatter();
-                bf.Binder = new DeserializationBinder();
-                return bf.Deserialize(stream) as object[];
-            }
-        }
-
-        private sealed class DeserializationBinder : SerializationBinder
-        {
-            public override Type BindToType(string assemblyName, string typeName)
-            {
-                Type typeToDeserialize = null;
-
-                // For each assemblyName/typeName that you want to deserialize to
-                // a different type, set typeToDeserialize to the desired type.
-                String exeAssembly = Assembly.GetExecutingAssembly().FullName;
-
-                // The following line of code returns the type.
-                typeToDeserialize = Type.GetType(String.Format("{0}, {1}", typeName, exeAssembly));
-
-                return typeToDeserialize;
-            }
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.Write("[{0}] ", DateTime.Now.ToLongTimeString());
+            Console.ForegroundColor = color;
+            Console.Write("{0}{1}", message, Environment.NewLine);
+            Console.ResetColor();
         }
     }
 }
