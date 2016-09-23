@@ -19,6 +19,7 @@ namespace NotLiteCode___Server
     public class Server
     {
         private RNGCryptoServiceProvider cRandom = new RNGCryptoServiceProvider(DateTime.Now.ToString());
+        private List<SharedClass> Clients = new List<SharedClass>();
         private List<KeyValuePair<string, MethodInfo>> RemotingMethods = new List<KeyValuePair<string, MethodInfo>>();
         private Socket sSocket = null;
 
@@ -97,17 +98,21 @@ namespace NotLiteCode___Server
         //Our method for accepting clients
         {
             Socket client = sSocket.EndAccept(iAR);
-            Log(String.Format("Client connected from IP: {0}", client.RemoteEndPoint.ToString()), ConsoleColor.Green);
+            Log(String.Format("Client connected from IP: {0}", client.RemoteEndPoint.ToString()), ConsoleColor.Green, true);
 
             sClient sC = new sClient();
             sC.cSocket = client;
-            sC.sCls = new SharedClass();
+            sC.iIndex = Clients.Count();
+
+            Clients.Add(new SharedClass());
+
             sC.eCls = null;
             sC.bSize = new byte[4];
 
             BeginEncrypting(ref sC);
 
             sC.cSocket.BeginReceive(sC.bSize, 0, sC.bSize.Length, SocketFlags.None, RetrieveCallback, sC);
+
             sSocket.BeginAccept(AcceptCallback, null);
         }
 
@@ -117,12 +122,26 @@ namespace NotLiteCode___Server
             sClient sC = (sClient)iAR.AsyncState;
             try
             {
+                SocketError sE;
+                if (sC.cSocket.EndReceive(iAR, out sE) == 0 || sE != SocketError.Success)
+                {
+                    Log(String.Format("Client IP: {0} has disconnected...", sC.cSocket.RemoteEndPoint.ToString()), ConsoleColor.Yellow, true);
+                    sC.cSocket.Close();
+                    Clients[sC.iIndex].Dispose();
+                    Clients.RemoveAt(sC.iIndex);
+                    // GC.Collect(0); For immediate disposal
+                    return;
+                }
+
                 byte[] cBuffer = new byte[BitConverter.ToInt32(sC.bSize, 0)];
                 sC.bSize = new byte[4];
 
                 sC.cSocket.Receive(cBuffer);
 
                 Log(String.Format("Receiving {0} bytes...", cBuffer.Length), ConsoleColor.Cyan);
+
+                if (cBuffer.Length <= 0)
+                    throw new Exception("Received null buffer from client!");
 
                 cBuffer = sC.eCls.AES_Decrypt(cBuffer);
 
@@ -141,7 +160,7 @@ namespace NotLiteCode___Server
                 if (mI == null)
                     throw new Exception("Client called method that does not exist in Shared Class! (Did you remember the [NLCCall] Attribute?)");
 
-                oRet[1] = mI.Invoke(sC.sCls, oMsg.Skip(2).Take(oMsg.Length - 2).ToArray());
+                oRet[1] = mI.Invoke(Clients[sC.iIndex], oMsg.Skip(2).Take(oMsg.Length - 2).ToArray());
 
                 Log(String.Format("Client IP: {0} called Remote Identifier: {1}", sC.cSocket.RemoteEndPoint.ToString(), oMsg[1] as string), ConsoleColor.Cyan);
 
@@ -149,14 +168,14 @@ namespace NotLiteCode___Server
                     Console.WriteLine("Method {0} returned null! Possible mismatch?", oMsg[1] as string);
 
                 BlockingSend(sC, oRet);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Something broke: " + ex.Message);
-            }
-            finally
-            {
                 sC.cSocket.BeginReceive(sC.bSize, 0, sC.bSize.Length, SocketFlags.None, RetrieveCallback, sC);
+            }
+            catch
+            {
+                Log(String.Format("Client IP: {0} has caused an exception...", sC.cSocket.RemoteEndPoint.ToString()), ConsoleColor.Yellow, true);
+                sC.cSocket.Close();
+                Clients[sC.iIndex].Dispose();
+                Clients.RemoveAt(sC.iIndex);
             }
         }
 
@@ -214,9 +233,9 @@ namespace NotLiteCode___Server
             return BinaryFormatterSerializer.Deserialize(sBuf);
         }
 
-        private void Log(string message, ConsoleColor color = ConsoleColor.Gray)
+        private void Log(string message, ConsoleColor color = ConsoleColor.Gray, bool force = false)
         {
-            if (!bDebugLog)
+            if (!bDebugLog && !force)
                 return;
 
             Console.ForegroundColor = ConsoleColor.Cyan;
@@ -238,10 +257,10 @@ namespace NotLiteCode___Server
         }
     }
 
-    public struct sClient
+    public class sClient
     {
         public Socket cSocket;
-        public SharedClass sCls;
+        public int iIndex;
         public Encryption eCls;
         public byte[] bSize;
     }

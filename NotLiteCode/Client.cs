@@ -51,6 +51,7 @@ namespace NotLiteCode
 
         #endregion Prototypes
 
+        
         /// <summary>
         /// Initializes the NLC Client. Credits to Killpot :^)
         /// </summary>

@@ -29,6 +29,7 @@ namespace NotLiteCode
             t.Stop();
 
             Console.WriteLine("{0} calls in 1 second!", l);
+            client.Stop();
             Process.GetCurrentProcess().WaitForExit();
         }
     }
