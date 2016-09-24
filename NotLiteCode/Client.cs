@@ -51,7 +51,6 @@ namespace NotLiteCode
 
         #endregion Prototypes
 
-        
         /// <summary>
         /// Initializes the NLC Client. Credits to Killpot :^)
         /// </summary>
@@ -148,7 +147,13 @@ namespace NotLiteCode
             cS.Receive(bSize);
 
             byte[] sBuf = new byte[BitConverter.ToInt32(bSize, 0)];
-            cS.Receive(sBuf);
+
+            int iReceived = 0;
+
+            while (iReceived < sBuf.Length)
+            {
+                iReceived += cS.Receive(sBuf, iReceived, sBuf.Length - iReceived, SocketFlags.None);
+            }
 
             if (sBuf.Length <= 0)
                 throw new Exception("Invalid data length, did the server force disconnect you?");

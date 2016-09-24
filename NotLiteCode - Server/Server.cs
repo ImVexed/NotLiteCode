@@ -221,7 +221,12 @@ namespace NotLiteCode___Server
             sC.cSocket.Receive(bSize);
 
             byte[] sBuf = new byte[BitConverter.ToInt32(bSize, 0)];
-            sC.cSocket.Receive(sBuf);
+            int iReceived = 0;
+
+            while (iReceived < sBuf.Length)
+            {
+                iReceived += sC.cSocket.Receive(sBuf, iReceived, sBuf.Length - iReceived, SocketFlags.None);
+            }
 
             Log(String.Format("Receiving {0} bytes...", sBuf.Length), ConsoleColor.Cyan);
 
