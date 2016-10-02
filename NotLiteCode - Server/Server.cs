@@ -90,14 +90,19 @@ namespace NotLiteCode___Server
         {
             if (sSocket == null)
                 throw new Exception("Server is not running...");
-            sSocket.Shutdown(SocketShutdown.Both);
             sSocket.Close();
         }
 
         private void AcceptCallback(IAsyncResult iAR)
         //Our method for accepting clients
         {
-            Socket client = sSocket.EndAccept(iAR);
+            Socket client = default(Socket);
+            try
+            {
+                client = sSocket.EndAccept(iAR);
+            }
+            catch { } // This will happen when we shutdown the server
+
             Log(String.Format("Client connected from IP: {0}", client.RemoteEndPoint.ToString()), ConsoleColor.Green, true);
 
             sClient sC = new sClient();
@@ -173,9 +178,22 @@ namespace NotLiteCode___Server
             catch
             {
                 Log(String.Format("Client IP: {0} has caused an exception...", sC.cSocket.RemoteEndPoint.ToString()), ConsoleColor.Yellow, true);
-                sC.cSocket.Close();
-                Clients[sC.iIndex].Dispose();
-                Clients.RemoveAt(sC.iIndex);
+                try
+                {
+                    sC.cSocket.Close();
+                }
+                catch { }
+
+                try
+                {
+                    Clients[sC.iIndex].Dispose();
+                }
+                catch { }
+                try
+                {
+                    Clients.RemoveAt(sC.iIndex);
+                }
+                catch { }
             }
         }
 
