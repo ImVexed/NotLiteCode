@@ -150,7 +150,7 @@ namespace NotLiteCode___Server
 
                 cBuffer = sC.eCls.AES_Decrypt(cBuffer);
 
-                object[] oMsg = BinaryFormatterSerializer.Deserialize(cBuffer);
+                object[] oMsg = Encryption.BinaryFormatterSerializer.Deserialize(cBuffer);
 
                 if (!oMsg[0].Equals(Headers.HEADER_CALL) && !oMsg[0].Equals(Headers.HEADER_MOVE)) // Check to make sure it's a method call/move
                     throw new Exception("Ahhh it's not a call or move, everyone run!");
@@ -216,12 +216,12 @@ namespace NotLiteCode___Server
             using (CngKey cPubKey = CngKey.Import(cBuf, CngKeyBlobFormat.EccPublicBlob))
                 sSymKey = sAlgo.DeriveKeyMaterial(cPubKey);
 
-            sC.eCls = new Encryption(sSymKey);
+            sC.eCls = new Encryption(sSymKey, HASH_STRENGTH.MEDIUM);
         }
 
         private void BlockingSend(sClient sC, params object[] param)
         {
-            byte[] bSend = BinaryFormatterSerializer.Serialize(param);
+            byte[] bSend = Encryption.BinaryFormatterSerializer.Serialize(param);
             if (sC.eCls != null)
                 bSend = sC.eCls.AES_Encrypt(bSend);
             else
@@ -253,7 +253,7 @@ namespace NotLiteCode___Server
             else
                 sBuf = Encryption.Decompress(sBuf);
 
-            return BinaryFormatterSerializer.Deserialize(sBuf);
+            return Encryption.BinaryFormatterSerializer.Deserialize(sBuf);
         }
 
         private void Log(string message, ConsoleColor color = ConsoleColor.Gray, bool force = false)

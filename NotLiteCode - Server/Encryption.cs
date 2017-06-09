@@ -2,87 +2,105 @@
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography;
 
 namespace NotLiteCode___Server
 {
+    public enum HASH_STRENGTH
+    {
+        LOW = 1000,
+        MEDIUM = 10000,
+        HIGH = 20000
+    }
+
     public class Encryption
     {
-        private RNGCryptoServiceProvider cRandom = new RNGCryptoServiceProvider(DateTime.Now.ToString());
+        public static int iCompressionLevel = 1;
+
+        private RNGCryptoServiceProvider cRandom = new RNGCryptoServiceProvider();
 
         private AesCryptoServiceProvider AES = new AesCryptoServiceProvider();
 
         private byte[] bKey;
 
-        public Encryption(byte[] key)
+        private HASH_STRENGTH strength;
+
+        public Encryption(byte[] key, HASH_STRENGTH strength)
         {
             bKey = key;
             AES.KeySize = 256;
             AES.BlockSize = 128;
             AES.Mode = CipherMode.CBC;
+            AES.Padding = PaddingMode.PKCS7;
+            this.strength = strength;
         }
 
         public byte[] AES_Encrypt(byte[] bytesToBeEncrypted)
         {
-            object[] oOut = new object[3];
+            byte[] bOut;
             byte[] bIV = new byte[16];
+
             cRandom.GetBytes(bIV);
-            oOut[0] = bIV;
 
-            var key = new PasswordDeriveBytes(bKey, oOut[0] as byte[]);
-
+            var key = new Rfc2898DeriveBytes(bKey, bIV, (int)strength);
             byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-            byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
+            byte[] bHIV = key.Salt;
 
             AES.Key = bHKey;
             AES.IV = bHIV;
 
             using (var iCT = AES.CreateEncryptor())
-            {
-                oOut[2] = iCT.TransformFinalBlock(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
-            }
+                bOut = iCT.TransformFinalBlock(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
 
-            oOut[1] = new HMACSHA256(bHKey).ComputeHash(oOut[2] as byte[]);
+            byte[] bFinal = new byte[bOut.Length + 32 + 16];
 
-            return Compress(BinaryFormatterSerializer.Serialize(oOut));
+            Array.Copy(bHIV, 0, bFinal, 0, 16);
+
+            using (var hmac = new HMACSHA256(bHKey))
+                Array.Copy(hmac.ComputeHash(bOut), 0, bFinal, 16, 32);
+
+            Array.Copy(bOut, 0, bFinal, 16 + 32, bOut.Length);
+            return Compress(bFinal);
         }
 
         public byte[] AES_Decrypt(byte[] bytes)
         {
-            byte[] decryptedBytes = null;
-            object[] oIn = BinaryFormatterSerializer.Deserialize(Decompress(bytes));
+            byte[] decryptedBytes;
+            byte[] bIn = Decompress(bytes);
+            byte[] bIV = new byte[16];
+            byte[] bHash = new byte[32];
+            byte[] bPayload = new byte[bIn.Length - 16 - 32];
 
-            var key = new PasswordDeriveBytes(bKey, oIn[0] as byte[]);
+            Array.Copy(bIn, bIV, 16);
+            Array.Copy(bIn, 16, bHash, 0, 32);
+            Array.Copy(bIn, 16 + 32, bPayload, 0, bIn.Length - 16 - 32);
 
+            var key = new Rfc2898DeriveBytes(bKey, bIV, (int)strength);
             byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-            byte[] bHIV = key.GetBytes(AES.BlockSize / 8);
+            byte[] bHIV = key.Salt;
 
             AES.Key = bHKey;
             AES.IV = bHIV;
 
-            if (!new HMACSHA256(bHKey).ComputeHash(oIn[2] as byte[]).SequenceEqual(oIn[1] as byte[]))
-                throw new Exception("Data has been modified! Oracle padding attack? Who cares! Run!");
-
-            byte[] bytesToBeDecrypted = oIn[2] as byte[];
+            using (var hmac = new HMACSHA256(bHKey))
+                if (!hmac.ComputeHash(bPayload).SequenceEqual(bHash))
+                    throw new Exception("Data has been modified! Oracle padding attack? Who cares! Run!");
 
             using (var iCT = AES.CreateDecryptor())
-            {
-                decryptedBytes = iCT.TransformFinalBlock(bytesToBeDecrypted, 0, bytesToBeDecrypted.Length);
-            }
+                decryptedBytes = iCT.TransformFinalBlock(bPayload, 0, bPayload.Length);
 
             return decryptedBytes;
         }
 
         public static byte[] Compress(byte[] input)
         {
-            using (MemoryStream ms = new MemoryStream())
+            using (var ps = new MemoryStream(input))
+            using (var ms = new MemoryStream())
             {
-                using (GZipStream _gz = new GZipStream(ms, CompressionMode.Compress))
+                using (var df = new DeflateStream(ms, CompressionMode.Compress))
                 {
-                    _gz.Write(input, 0, input.Length);
+                    ps.WriteTo(df);
                 }
                 return ms.ToArray();
             }
@@ -90,59 +108,36 @@ namespace NotLiteCode___Server
 
         public static byte[] Decompress(byte[] input)
         {
-            using (MemoryStream decompressed = new MemoryStream())
+            using (var ps = new MemoryStream(input))
+            using (var ms = new MemoryStream())
             {
-                using (MemoryStream ms = new MemoryStream(input))
+                using (var df = new DeflateStream(ps, CompressionMode.Decompress))
                 {
-                    using (GZipStream _gz = new GZipStream(ms, CompressionMode.Decompress))
-                    {
-                        byte[] Bytebuffer = new byte[1024];
-                        int bytesRead = 0;
-                        while ((bytesRead = _gz.Read(Bytebuffer, 0, Bytebuffer.Length)) > 0)
-                        {
-                            decompressed.Write(Bytebuffer, 0, bytesRead);
-                        }
-                    }
-                    return decompressed.ToArray();
+                    df.CopyTo(ms);
+                }
+                return ms.ToArray();
+            }
+        }
+
+        public class BinaryFormatterSerializer
+        {
+            public static byte[] Serialize(object Message)
+            {
+                using (MemoryStream stream = new MemoryStream())
+                {
+                    BinaryFormatter bf = new BinaryFormatter();
+                    bf.Serialize(stream, Message);
+                    return stream.ToArray();
                 }
             }
-        }
-    }
 
-    public class BinaryFormatterSerializer
-    {
-        public static byte[] Serialize(object Message)
-        {
-            using (MemoryStream stream = new MemoryStream())
+            public static object[] Deserialize(byte[] MessageData)
             {
-                BinaryFormatter bf = new BinaryFormatter();
-                bf.Binder = new DeserializationBinder();
-                bf.Serialize(stream, Message);
-                return stream.ToArray();
-            }
-        }
-
-        public static object[] Deserialize(byte[] MessageData)
-        {
-            using (MemoryStream stream = new MemoryStream(MessageData))
-            {
-                BinaryFormatter bf = new BinaryFormatter();
-                bf.Binder = new DeserializationBinder();
-                return bf.Deserialize(stream) as object[];
-            }
-        }
-
-        private sealed class DeserializationBinder : SerializationBinder
-        {
-            public override Type BindToType(string assemblyName, string typeName)
-            {
-                Type typeToDeserialize = null;
-
-                String exeAssembly = Assembly.GetExecutingAssembly().FullName;
-
-                typeToDeserialize = Type.GetType(String.Format("{0}, {1}", typeName, exeAssembly));
-
-                return typeToDeserialize;
+                using (MemoryStream stream = new MemoryStream(MessageData))
+                {
+                    BinaryFormatter bf = new BinaryFormatter();
+                    return bf.Deserialize(stream) as object[];
+                }
             }
         }
     }

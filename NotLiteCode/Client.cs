@@ -108,7 +108,7 @@ namespace NotLiteCode
 
             Log(String.Format("Handshake complete, key length: {0}", bKeyTemp.Length), ConsoleColor.Green);
 
-            eCls = new Encryption(bKeyTemp);
+            eCls = new Encryption(bKeyTemp, HASH_STRENGTH.MEDIUM);
         }
 
         private T RemoteCall<T>(string identifier, params object[] param)
@@ -165,12 +165,12 @@ namespace NotLiteCode
             else
                 sBuf = Encryption.Decompress(sBuf);
 
-            return BinaryFormatterSerializer.Deserialize(sBuf);
+            return Encryption.BinaryFormatterSerializer.Deserialize(sBuf);
         }
 
         private void BlockingSend(params object[] param)
         {
-            byte[] bSend = BinaryFormatterSerializer.Serialize(param);
+            byte[] bSend = Encryption.BinaryFormatterSerializer.Serialize(param);
 
             if (eCls != null)
                 bSend = eCls.AES_Encrypt(bSend);
