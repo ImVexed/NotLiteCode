@@ -14,6 +14,7 @@ namespace NotLiteCode___Server
     public const byte HEADER_RETURN = 0x02;
     public const byte HEADER_HANDSHAKE = 0x03;
     public const byte HEADER_MOVE = 0x04;
+    public const byte HEADER_ERROR = 0x05;
   }
 
   public class Server
@@ -167,15 +168,17 @@ namespace NotLiteCode___Server
         try
         {
           oRet[1] = mI.Invoke(Clients[sEP].sClass, oMsg.Slice(2, oMsg.Length - 2));
-        } catch(Exception ex)
+        }
+        catch
         {
           Log($"Client IP: {sEP} caused an exception invoking {oMsg[1]}");
+          oRet[0] = Headers.HEADER_ERROR;
         }
 
         Log($"Client IP: {sEP} called Remote Identifier: {oMsg[1]}", ConsoleColor.Cyan);
 
-        if (oRet[1] == null && oMsg[0].Equals(Headers.HEADER_MOVE))
-          Console.WriteLine("Method {0} returned null! Possible mismatch?", oMsg[1] as string);
+        if (oRet[1] == null && oMsg[0].Equals(Headers.HEADER_MOVE) && !oRet[0].Equals(Headers.HEADER_ERROR))
+          Console.WriteLine($"Method {oMsg[1]} returned null! Is this supposed to be a HEADER_CALL instead of HEADER_MOVE?");
 
         BlockingSend(sC, oRet);
         sC.cSocket.BeginReceive(sC.bSize, 0, sC.bSize.Length, SocketFlags.None, RetrieveCallback, sEP);
