@@ -7,7 +7,7 @@ NLC (Not Lite Code) is a simplified version of LiteCode by *DragonHunter*, which
 NLC intends to implement what was done in LiteCode but simplified and distilled down into 1 class (for the main logic atleast). 
 
 ## How does this differ from traditional RPC/RMI?
-Traditionally RPC/RMI implements a stub interface and is tightly coupled. NLC however can function without a stuf interface, and is loosly coupled. NLC also implements end to end encryption (alongside an Eliptic Curve Diffie-Hellman Handshake), DEFLATE compression, client isolation, and a stupidly simple implementation.  Each client that connects to the NLC server also get's a unique instance of the SharedClass, making multi-client implementations a breeze.
+Traditionally RPC/RMI implements a stub interface and is tightly coupled. NLC however can function without a stub interface, and is loosly coupled. NLC also implements end to end encryption (alongside an Eliptic Curve Diffie-Hellman Handshake), DEFLATE compression, client isolation, and a stupidly simple implementation.  Each client that connects to the NLC server also get's a unique instance of the SharedClass, making multi-client implementations a breeze.
 
 ## Sample Implementation
 ### Server Code:
