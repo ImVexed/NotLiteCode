@@ -1,5 +1,5 @@
-# NotLiteCode
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/ImVexed/notlitecode)](https://ci.appveyor.com/project/ImVexed/notlitecode)
+# NotLiteCode
 A simple hackable remote code hosting platform.
 
 ## What is?
