@@ -151,9 +151,7 @@ namespace NotLiteCode
             int iReceived = 0;
 
             while (iReceived < sBuf.Length)
-            {
                 iReceived += cS.Receive(sBuf, iReceived, sBuf.Length - iReceived, SocketFlags.None);
-            }
 
             if (sBuf.Length <= 0)
                 throw new Exception("Invalid data length, did the server force disconnect you?");
@@ -176,6 +174,7 @@ namespace NotLiteCode
                 bSend = eCls.AES_Encrypt(bSend);
             else
                 bSend = Encryption.Compress(bSend);
+
             Log(String.Format("Sending {0} bytes...", bSend.Length), ConsoleColor.Cyan);
             cS.Send(BitConverter.GetBytes(bSend.Length)); // Send expected payload length, gets bytes of int representing size, will always be 4 bytes for Int32
             cS.Send(bSend);
