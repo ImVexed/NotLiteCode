@@ -19,7 +19,7 @@ namespace NotLiteCode___Server
 
   public class Server
   {
-    private RNGCryptoServiceProvider cRandom = new RNGCryptoServiceProvider(DateTime.Now.ToString());
+    private RNGCryptoServiceProvider cRandom = new RNGCryptoServiceProvider();
     private Dictionary<EndPoint, sClient> Clients = new Dictionary<EndPoint, sClient>();
     private Dictionary<string, MethodInfo> RemotingMethods = new Dictionary<string, MethodInfo>();
     private Socket sSocket = null;
