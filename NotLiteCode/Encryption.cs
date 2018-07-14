@@ -1,144 +1,209 @@
-﻿using System;
+﻿using NotLiteCode.Network;
+using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography;
 
-namespace NotLiteCode
+namespace NotLiteCode.Encryption
 {
   public enum HASH_STRENGTH
   {
-    LOW = 1000,
+    LOW = 10000,
     MEDIUM = 10000,
     HIGH = 20000
   }
 
-  public class Encryption
+  public class Compressor
   {
-    public static int iCompressionLevel = 1;
-
-    private RNGCryptoServiceProvider cRandom = new RNGCryptoServiceProvider();
-
-    private AesCryptoServiceProvider AES = new AesCryptoServiceProvider();
-
-    private byte[] bKey;
-
-    private HASH_STRENGTH strength;
-
-    public Encryption(byte[] key, HASH_STRENGTH strength)
+    public static byte[] Compress(byte[] Bytes)
     {
-      bKey = key;
-      AES.KeySize = 256;
-      AES.BlockSize = 128;
-      AES.Mode = CipherMode.CBC;
-      AES.Padding = PaddingMode.PKCS7;
-      this.strength = strength;
+      using (var InputStream = new MemoryStream(Bytes))
+      using (var OutputStream = new MemoryStream())
+      {
+        using (var DeflateStream = new DeflateStream(OutputStream, CompressionMode.Compress))
+        {
+          InputStream.CopyTo(DeflateStream);
+        }
+        return OutputStream.ToArray();
+      }
     }
 
-    public byte[] AES_Encrypt(byte[] bytesToBeEncrypted)
+    public static byte[] Decompress(byte[] Bytes)
     {
-      byte[] bOut;
-      byte[] bIV = new byte[16];
+      using (var InputStream = new MemoryStream(Bytes))
+      using (var OutputStream = new MemoryStream())
+      {
+        using (var DeflateStream = new DeflateStream(InputStream, CompressionMode.Decompress))
+        {
+          DeflateStream.CopyTo(OutputStream);
+        }
+        return OutputStream.ToArray();
+      }
+    }
+  }
 
-      cRandom.GetBytes(bIV);
-
-      var key = new Rfc2898DeriveBytes(bKey, bIV, (int)strength);
-      byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-      byte[] bHIV = key.Salt;
-
-      AES.Key = bHKey;
-      AES.IV = bHIV;
-
-      using (var iCT = AES.CreateEncryptor())
-        bOut = iCT.TransformFinalBlock(bytesToBeEncrypted, 0, bytesToBeEncrypted.Length);
-
-      byte[] bFinal = new byte[bOut.Length + 32 + 16];
-
-      Array.Copy(bHIV, 0, bFinal, 0, 16);
-
-      using (var hmac = new HMACSHA256(bHKey))
-        Array.Copy(hmac.ComputeHash(bOut), 0, bFinal, 16, 32);
-
-      Array.Copy(bOut, 0, bFinal, 16 + 32, bOut.Length);
-      return Compress(bFinal);
+  public class Serializer
+  {
+    public static byte[] Serialize(object Message)
+    {
+      using (MemoryStream OutputStream = new MemoryStream())
+      {
+        BinaryFormatter Formatter = new BinaryFormatter();
+        Formatter.Serialize(OutputStream, Message);
+        return OutputStream.ToArray();
+      }
     }
 
-    public byte[] AES_Decrypt(byte[] bytes)
+    public static object[] Deserialize(byte[] MessageData)
     {
-      byte[] decryptedBytes;
-      byte[] bIn = Decompress(bytes);
-      byte[] bIV = new byte[16];
-      byte[] bHash = new byte[32];
-      byte[] bPayload = new byte[bIn.Length - 16 - 32];
+      using (MemoryStream OutputStream = new MemoryStream(MessageData))
+      {
+        BinaryFormatter Formatter = new BinaryFormatter();
+        return Formatter.Deserialize(OutputStream) as object[];
+      }
+    }
+  }
 
-      Array.Copy(bIn, bIV, 16);
-      Array.Copy(bIn, 16, bHash, 0, 32);
-      Array.Copy(bIn, 16 + 32, bPayload, 0, bIn.Length - 16 - 32);
+  public class Encryptor
+  {
+    public static int CompressionLevel = 1;
 
-      var key = new Rfc2898DeriveBytes(bKey, bIV, (int)strength);
-      byte[] bHKey = key.GetBytes(AES.KeySize / 8);
-      byte[] bHIV = key.Salt;
+    private RNGCryptoServiceProvider CryptoRandom = new RNGCryptoServiceProvider();
+    private AesCryptoServiceProvider AESProvider = new AesCryptoServiceProvider();
 
-      AES.Key = bHKey;
-      AES.IV = bHIV;
+    private const int IV_LENGTH = 16;
+    private const int HASH_LENGTH = 32;
 
-      using (var hmac = new HMACSHA256(bHKey))
-        if (!hmac.ComputeHash(bPayload).SequenceEqual(bHash))
+    private readonly byte[] Key;
+
+    private readonly HASH_STRENGTH HashStrength;
+
+    public Encryptor(byte[] Key, HASH_STRENGTH HashStrength)
+    {
+      this.HashStrength = HashStrength;
+      this.Key = Key;
+
+      AESProvider.KeySize = 256;
+      AESProvider.BlockSize = 128;
+      AESProvider.Mode = CipherMode.CBC;
+      AESProvider.Padding = PaddingMode.PKCS7;
+    }
+
+    public byte[] AES_Encrypt(byte[] Bytes)
+    {
+      byte[] EncryptedBytes;
+      byte[] IV = new byte[IV_LENGTH];
+
+      CryptoRandom.GetBytes(IV);
+
+      AESProvider.Key = this.Key;
+      AESProvider.IV = IV;
+
+      using (var AESEncryptor = AESProvider.CreateEncryptor())
+        EncryptedBytes = AESEncryptor.TransformFinalBlock(Bytes, 0, Bytes.Length);
+
+      byte[] PackagedBytes = new byte[EncryptedBytes.Length + IV_LENGTH + HASH_LENGTH];
+
+      Array.Copy(IV, 0, PackagedBytes, 0, IV_LENGTH);
+
+      using (var HMAC = new HMACSHA256(this.Key))
+        Array.Copy(HMAC.ComputeHash(EncryptedBytes), 0, PackagedBytes, IV_LENGTH, HASH_LENGTH);
+
+      Array.Copy(EncryptedBytes, 0, PackagedBytes, IV_LENGTH + HASH_LENGTH, EncryptedBytes.Length);
+      return Compressor.Compress(PackagedBytes);
+    }
+
+    public byte[] AES_Decrypt(byte[] Bytes)
+    {
+      byte[] DecryptedBytes;
+      byte[] DecompressedBytes = Compressor.Decompress(Bytes);
+
+      byte[] IV = DecompressedBytes.Slice(0, IV_LENGTH);
+      byte[] Hash = DecompressedBytes.Slice(IV_LENGTH, HASH_LENGTH);
+      byte[] EncryptedBytes = DecompressedBytes.Slice(IV_LENGTH + HASH_LENGTH, DecompressedBytes.Length - IV_LENGTH - HASH_LENGTH);
+
+      AESProvider.Key = this.Key;
+      AESProvider.IV = IV;
+
+      using (var HMAC = new HMACSHA256(this.Key))
+        if (!HMAC.ComputeHash(EncryptedBytes).SequenceEqual(Hash))
           throw new Exception("Data has been modified! Oracle padding attack? Who cares! Run!");
 
-      using (var iCT = AES.CreateDecryptor())
-        decryptedBytes = iCT.TransformFinalBlock(bPayload, 0, bPayload.Length);
+      using (var AESDecryptor = AESProvider.CreateDecryptor())
+        DecryptedBytes = AESDecryptor.TransformFinalBlock(EncryptedBytes, 0, EncryptedBytes.Length);
 
-      return decryptedBytes;
+      return DecryptedBytes;
     }
 
-    public static byte[] Compress(byte[] input)
+    public static bool TrySendHandshake(NLCSocket Client, out Encryptor Encryptor, HASH_STRENGTH HashStrength = HASH_STRENGTH.LOW)
     {
-      using (var ps = new MemoryStream(input))
-      using (var ms = new MemoryStream())
+      CngKey ECDH = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256);
+      byte[] ServerPublicKey = ECDH.Export(CngKeyBlobFormat.EccPublicBlob);
+
+      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, ServerPublicKey);
+
+      if (!Client.TryBlockingSend(ServerPublicEvent, false))
       {
-        using (var df = new DeflateStream(ms, CompressionMode.Compress))
-        {
-          ps.WriteTo(df);
-        }
-        return ms.ToArray();
+        Encryptor = default(Encryptor);
+        return false;
+      }
+
+      if (!Client.TryBlockingReceive(out var ClientPublicEvent, false))
+      {
+        Encryptor = default(Encryptor);
+        return false;
+      }
+
+      if (ClientPublicEvent.Header != NetworkHeader.HEADER_HANDSHAKE)
+      {
+        Encryptor = default(Encryptor);
+        return false;
+      }
+
+      byte[] ClientKey = ClientPublicEvent.Data as byte[];
+
+      using (var ECDHDerive = new ECDiffieHellmanCng(ECDH))
+      using (CngKey ClientPublicKey = CngKey.Import(ClientKey, CngKeyBlobFormat.EccPublicBlob))
+      {
+        Encryptor = new Encryptor(ECDHDerive.DeriveKeyMaterial(ClientPublicKey), HashStrength);
+        return true;
       }
     }
 
-    public static byte[] Decompress(byte[] input)
+    public static bool TryReceiveHandshake(NLCSocket Client, out Encryptor Encryptor, HASH_STRENGTH HashStrength = HASH_STRENGTH.LOW)
     {
-      using (var ps = new MemoryStream(input))
-      using (var ms = new MemoryStream())
-      {
-        using (var df = new DeflateStream(ps, CompressionMode.Decompress))
-        {
-          df.CopyTo(ms);
-        }
-        return ms.ToArray();
-      }
-    }
+      CngKey ECDH = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256);
+      byte[] ClientPublicKey = ECDH.Export(CngKeyBlobFormat.EccPublicBlob);
 
-    public class BinaryFormatterSerializer
-    {
-      public static byte[] Serialize(object Message)
+      if (!Client.TryBlockingReceive(out var ClientPublicEvent, false))
       {
-        using (MemoryStream stream = new MemoryStream())
-        {
-          BinaryFormatter bf = new BinaryFormatter();
-          bf.Serialize(stream, Message);
-          return stream.ToArray();
-        }
+        Encryptor = default(Encryptor);
+        return false;
       }
 
-      public static object[] Deserialize(byte[] MessageData)
+      if (ClientPublicEvent.Header != NetworkHeader.HEADER_HANDSHAKE)
       {
-        using (MemoryStream stream = new MemoryStream(MessageData))
-        {
-          BinaryFormatter bf = new BinaryFormatter();
-          return bf.Deserialize(stream) as object[];
-        }
+        Encryptor = default(Encryptor);
+        return false;
       }
+
+      byte[] ServerKey = ClientPublicEvent.Data as byte[];
+
+      using (var ECDHDerive = new ECDiffieHellmanCng(ECDH))
+      using (CngKey ServerPublicKey = CngKey.Import(ServerKey, CngKeyBlobFormat.EccPublicBlob))
+        Encryptor = new Encryptor(ECDHDerive.DeriveKeyMaterial(ServerPublicKey), HashStrength);
+
+      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, ClientPublicKey);
+
+      if (!Client.TryBlockingSend(ServerPublicEvent, false))
+      {
+        Encryptor = default(Encryptor);
+        return false;
+      }
+
+      return true;
     }
   }
 }
