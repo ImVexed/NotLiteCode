@@ -2,6 +2,9 @@
 # NotLiteCode
 A simple hackable remote code hosting platform.
 
+## Update as of 7/14/2018
+I've begun refactoring the codebase, expect much more modular code & a much better development experience. Expect slight instability as the codebase normalizes.
+
 ## What is?
 NLC (Not Lite Code) is a simplified version of LiteCode by *DragonHunter*, which allows clients to execute code on a server as if they were calling a function that was being run locally(effectively [RMI](https://en.wikipedia.org/wiki/Distributed_object_communication)(Remote Method Invokation as opposed to non-OOP [RPC](https://en.wikipedia.org/wiki/Remote_procedure_call)(Remote Procedure Call)).
 NLC intends to implement what was done in LiteCode but simplified and distilled down into 1 class (for the main logic atleast). 
@@ -21,27 +24,29 @@ public string CombineTwoStringsAndReturn(string s1, string s2)
 ```
 Program.cs
 ```C#
-var server = new Server();
+var socket = new NLCSocket();
+var server = new Server<SharedClass>(socket);
 server.Start();
 ```
 ### Client Code:
-Client.cs
-```C#
-public string CombineTwoStringsAndReturn(string s1, string s2)
-    => RemoteCall<string>("Pinocchio", s1, s2);
-```
 Program.cs
 ```C#
-Client client = new Client();
-client.Start();
+private static string CombineTwoStringsAndReturn(string s1, string s2) =>
+      Client.RemoteCall<string>("Pinocchio", s1, s2);
+      
+var Socket = new NLCSocket();
+Client = new Client(Socket);
 
-Console.WriteLine(client.CombineTwoStringsAndReturn("I'm a ", "real boy!")); // Returns "Magical server says, s1+ s2 = I'm a real boy!"
+Client.Connect("localhost", 1337);
+
+Console.WriteLine(CombineTwoStringsAndReturn("I'm a ", "real boy!")); // Returns "Magical server says, s1 + s2 = I'm a real boy!"
 ```
 ## Sample Outputs
 <img src="http://image.prntscr.com/image/3dabba40de9643e18c2362a1e0e6f9d3.png" align="center" />
  
 ## Planned Features:
- - All features currently satisfied...
+ - NuGet Package
+ - More modularization & abstraction to appropriate levels
  
 ## Original
-[LiteCode](https://github.com/AnguisCaptor/LiteCode) by *DragonHunter*
+[LiteCode](https://gitlab.com/Dergan/LiteCode) by *DragonHunter* 
