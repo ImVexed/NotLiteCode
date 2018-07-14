@@ -2,9 +2,9 @@ version: 1.0.{build}
 image: Visual Studio 2015
 environment:
   matrix:
-    - platform: Any
+    - platform: AnyCPU
       configuration: Debug
-    - platform: Any
+    - platform: AnyCPU
       configuration: Release
 matrix:
   fast_finish: false
