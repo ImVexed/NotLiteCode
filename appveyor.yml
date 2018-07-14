@@ -1,0 +1,20 @@
+version: 1.0.{build}
+image: Visual Studio 2015
+environment:
+  matrix:
+    - platform: Any
+      configuration: Debug
+    - platform: Any
+      configuration: Release
+matrix:
+  fast_finish: false
+nuget:
+  project_feed: true
+build:
+  parallel: true
+  verbosity: normal
+artifacts:
+- path: NotLiteCode\bin\Release\NotLiteCode.dll
+  name: NotLiteCode.dll
+- path: NotLiteCode\bin\Debug\NotLiteCode.dll
+  name: NotLiteCode.dll
