@@ -2,9 +2,9 @@ version: 1.0.{build}
 image: Visual Studio 2015
 environment:
   matrix:
-    - platform: AnyCPU
+    - platform: x64
       configuration: Debug
-    - platform: AnyCPU
+    - platform: x64
       configuration: Release
 matrix:
   fast_finish: false
@@ -14,7 +14,7 @@ build:
   parallel: true
   verbosity: normal
 artifacts:
-- path: NotLiteCode\bin\Release\NotLiteCode.dll
+- path: NotLiteCode\bin\x64\Release\NotLiteCode.dll
   name: NotLiteCode.dll
-- path: NotLiteCode\bin\Debug\NotLiteCode.dll
+- path: NotLiteCode\bin\x64\Debug\NotLiteCode.dll
   name: NotLiteCode.dll
