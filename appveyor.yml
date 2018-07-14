@@ -1,20 +1,16 @@
 version: 1.0.{build}
-image: Visual Studio 2015
-environment:
-  matrix:
-    - platform: x64
-      configuration: Debug
-    - platform: x64
-      configuration: Release
-matrix:
-  fast_finish: false
-nuget:
-  project_feed: true
+image: Visual Studio 2017
+configuration:
+- Release
+- Debug
+platform: Any CPU
+shallow_clone: true
 build:
+  project: NotLiteCode.sln
   parallel: true
-  verbosity: normal
+  verbosity: minimal
 artifacts:
-- path: NotLiteCode\bin\x64\Release\NotLiteCode.dll
+- path: NotLiteCode\bin\Release\NotLiteCode.dll
   name: NotLiteCode.dll
-- path: NotLiteCode\bin\x64\Debug\NotLiteCode.dll
+- path: NotLiteCode\bin\Debug\NotLiteCode.dll
   name: NotLiteCode.dll
