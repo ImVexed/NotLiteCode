@@ -1,8 +1,7 @@
-﻿using NotLiteCode.Server;
-using NotLiteCode.Network;
+﻿using NotLiteCode.Network;
+using NotLiteCode.Server;
 using System;
 using System.Diagnostics;
-using System.Threading;
 
 namespace NotLiteCode___Server
 {
@@ -21,15 +20,17 @@ namespace NotLiteCode___Server
 
       Server.OnServerClientConnected += (x, y) => Log($"Client {y.Client} connected!", ConsoleColor.Green);
       Server.OnServerClientDisconnected += (x, y) => Log($"Client {y.Client} disconnected!", ConsoleColor.Yellow);
-      Server.OnServerMethodInvoked += (x, y) => Log($"Client {y.Client} {(y.WasErroneous ? "failed to invoke" : "invoked")} {y.Identifier}", y.WasErroneous ? ConsoleColor.Yellow : ConsoleColor.Cyan);
+      //Server.OnServerMethodInvoked += (x, y) => Log($"Client {y.Client} {(y.WasErroneous ? "failed to invoke" : "invoked")} {y.Identifier}", y.WasErroneous ? ConsoleColor.Yellow : ConsoleColor.Cyan);
       Server.OnServerExceptionOccurred += (x, y) => Log($"Exception Occured! {y.Exception}", ConsoleColor.Red);
 
       Server.Start();
 
+      Log("Server Started!", ConsoleColor.Green);
+
       Process.GetCurrentProcess().WaitForExit();
     }
 
-    static readonly object WriteLock = new object();
+    private static readonly object WriteLock = new object();
 
     private static void Log(string message, ConsoleColor color)
     {

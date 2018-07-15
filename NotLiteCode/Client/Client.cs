@@ -2,6 +2,7 @@
 using NotLiteCode.Cryptography;
 using NotLiteCode.Network;
 using System;
+using System.Threading.Tasks;
 
 namespace NotLiteCode
 {
@@ -17,11 +18,11 @@ namespace NotLiteCode
       this.ClientSocket = ClientSocket;
     }
 
-    public bool Connect(string ServerAddress, int ServerPort)
+    public async Task<bool> Connect(string ServerAddress, int ServerPort)
     {
-      ClientSocket.Connect(ServerAddress, ServerPort);
+      await ClientSocket.Connect(ServerAddress, ServerPort);
 
-      return ClientSocket.TryReceiveHandshake();
+      return await ClientSocket.TryReceiveHandshake();
     }
 
     public void Stop()
@@ -29,14 +30,16 @@ namespace NotLiteCode
       ClientSocket.Close();
     }
 
-    public T RemoteCall<T>(string identifier, params object[] param)
+    public async Task<T> RemoteCall<T>(string identifier, params object[] param)
     {
-      var Event = new NetworkEvents(NetworkHeader.HEADER_MOVE, identifier, param);
+      var Event = new NetworkEvent(NetworkHeader.HEADER_MOVE, identifier, param);
 
-      if (!ClientSocket.TryBlockingSend(Event))
+      if (!await ClientSocket.BlockingSend(Event))
         throw new Exception("Failed to sent request to server!");
 
-      if (!ClientSocket.TryBlockingReceive(out var ReturnEvent))
+      NetworkEvent ReturnEvent;
+
+      if ((ReturnEvent = await ClientSocket.BlockingReceive()) == default(NetworkEvent))
         throw new Exception("Failed to receive result from server!");
 
       if (ReturnEvent.Header == NetworkHeader.HEADER_ERROR)
@@ -47,14 +50,16 @@ namespace NotLiteCode
       return (T)ReturnEvent.Data;
     }
 
-    public void RemoteCall(string identifier, params object[] param)
+    public async Task RemoteCall(string identifier, params object[] param)
     {
-      var Event = new NetworkEvents(NetworkHeader.HEADER_CALL, identifier, param);
+      var Event = new NetworkEvent(NetworkHeader.HEADER_CALL, identifier, param);
 
-      if (!ClientSocket.TryBlockingSend(Event))
+      if (!await ClientSocket.BlockingSend(Event))
         throw new Exception("Failed to sent request to server!");
 
-      if (!ClientSocket.TryBlockingReceive(out var ReturnEvent))
+      NetworkEvent ReturnEvent;
+
+      if ((ReturnEvent = await ClientSocket.BlockingReceive()) == default(NetworkEvent))
         throw new Exception("Failed to receive result from server!");
 
       if (ReturnEvent.Header == NetworkHeader.HEADER_ERROR)

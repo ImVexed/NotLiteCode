@@ -1,31 +1,32 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Net;
 
 namespace NotLiteCode.Network
 {
-  public class NetworkEvents
+  public class NetworkEvent
   {
     public readonly NetworkHeader Header;
     public readonly string Tag;
     public readonly object Data;
 
-    public NetworkEvents(NetworkHeader Header, string Tag, object Data)
+    public NetworkEvent(NetworkHeader Header, string Tag, object Data)
     {
       this.Header = Header;
       this.Tag = Tag;
       this.Data = Data;
     }
 
-    public static bool TryParse(object[] NetworkMessage, out NetworkEvents Event)
+    public static bool TryParse(object[] NetworkMessage, out NetworkEvent Event)
     {
       if (NetworkMessage.Length < 1 || !NetworkMessage[0].TryParseEnum<NetworkHeader>(out var Header))
       {
-        Event = default(NetworkEvents);
+        Event = default(NetworkEvent);
         return false;
       }
       else
       {
-        Event = new NetworkEvents(Header, NetworkMessage[1] as string, NetworkMessage[2]);
+        Event = new NetworkEvent(Header, NetworkMessage[1] as string, NetworkMessage[2]);
         return true;
       }
     }
@@ -36,11 +37,11 @@ namespace NotLiteCode.Network
     }
   }
 
-  public class OnNetworkMessageReceivedEventArgs : EventArgs
+  public class OnNetworkMessageReceivedEventArgs : AsyncCompletedEventArgs
   {
-    public readonly NetworkEvents Message;
+    public readonly NetworkEvent Message;
 
-    public OnNetworkMessageReceivedEventArgs(NetworkEvents Message)
+    public OnNetworkMessageReceivedEventArgs(NetworkEvent Message) : base(null, false, null)
     {
       this.Message = Message;
     }

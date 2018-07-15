@@ -1,10 +1,13 @@
 ﻿using NotLiteCode.Compression;
 using NotLiteCode.Cryptography;
+using NotLiteCode.Misc;
 using NotLiteCode.Network;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NotLiteCode.Server
 {
@@ -44,7 +47,7 @@ namespace NotLiteCode.Server
 
           if (RemotingMethods.ContainsKey(thisAttr.Identifier))
           {
-            OnServerExceptionOccurred?.BeginInvoke(this, new OnServerExceptionOccurredEventArgs(new Exception($"Method with identifier {thisAttr.Identifier} already exists!")), null, null);
+            OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(new Exception($"Method with identifier {thisAttr.Identifier} already exists!")));
             continue;
           }
 
@@ -55,8 +58,8 @@ namespace NotLiteCode.Server
 
     public void Start()
     {
-      ServerSocket.OnNetworkClientDisconnected += (x, y) => OnServerClientDisconnected?.BeginInvoke(this, new OnServerClientDisconnectedEventArgs(y.Client), null, null);
-      ServerSocket.OnNetworkExceptionOccurred += (x, y) => OnServerExceptionOccurred?.BeginInvoke(this, new OnServerExceptionOccurredEventArgs(y.Exception), null, null);
+      ServerSocket.OnNetworkClientDisconnected += (x, y) => OnServerClientDisconnected?.Invoke(this, new OnServerClientDisconnectedEventArgs(y.Client));
+      ServerSocket.OnNetworkExceptionOccurred += (x, y) => OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(y.Exception));
       ServerSocket.OnNetworkClientConnected += OnNetworkClientConnected;
 
       ServerSocket.Listen();
@@ -68,9 +71,9 @@ namespace NotLiteCode.Server
       ServerSocket.Close();
     }
 
-    private void OnNetworkClientConnected(object sender, OnNetworkClientConnectedEventArgs e)
+    private async void OnNetworkClientConnected(object sender, OnNetworkClientConnectedEventArgs e)
     {
-      if (e.Client.TrySendHandshake())
+      if (await e.Client.TrySendHandshake())
       {
         var Client = new RemoteClient<T>(e.Client);
         e.Client.OnNetworkMessageReceived += OnNetworkMessageReceived;
@@ -78,15 +81,15 @@ namespace NotLiteCode.Server
 
         Clients.Add(e.Client.BaseSocket.RemoteEndPoint, Client);
 
-        OnServerClientConnected?.BeginInvoke(this, new OnServerClientConnectedEventArgs(e.Client.BaseSocket.RemoteEndPoint), null, null);
+        OnServerClientConnected?.Invoke(this, new OnServerClientConnectedEventArgs(e.Client.BaseSocket.RemoteEndPoint));
       }
     }
 
-    private void OnNetworkMessageReceived(object sender, OnNetworkMessageReceivedEventArgs e)
+    private async void OnNetworkMessageReceived(object sender, OnNetworkMessageReceivedEventArgs e)
     {
       if (e.Message.Header != NetworkHeader.HEADER_CALL && e.Message.Header != NetworkHeader.HEADER_MOVE)
       {
-        OnServerExceptionOccurred?.BeginInvoke(this, new OnServerExceptionOccurredEventArgs(new Exception("Invalid message type received!")), null, null);
+        OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(new Exception("Invalid message type received!")));
         return;
       }
 
@@ -97,7 +100,7 @@ namespace NotLiteCode.Server
 
       if (!RemotingMethods.TryGetValue(e.Message.Tag, out var TargetMethod))
       {
-        OnServerExceptionOccurred?.BeginInvoke(this, new OnServerExceptionOccurredEventArgs(new Exception("Client attempted to invoke invalid function!")), null, null);
+        OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(new Exception("Client attempted to invoke invalid function!")));
         ResultHeader = NetworkHeader.NONE;
       }
       else
@@ -109,16 +112,16 @@ namespace NotLiteCode.Server
         }
         catch
         {
-          OnServerExceptionOccurred?.BeginInvoke(this, new OnServerExceptionOccurredEventArgs(new Exception($"Client caused an exception invoking {e.Message.Tag}")), null, null);
+          OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(new Exception($"Client caused an exception invoking {e.Message.Tag}")));
           ResultHeader = NetworkHeader.HEADER_ERROR;
         }
 
         OnServerMethodInvoked?.BeginInvoke(this, new OnServerMethodInvokedEventArgs(RemoteEndPoint, e.Message.Tag, ResultHeader == NetworkHeader.HEADER_ERROR), null, null);
       }
 
-      var Event = new NetworkEvents(ResultHeader, null, Result);
-
-      ((NLCSocket)sender).TryBlockingSend(Event);
+      var Event = new NetworkEvent(ResultHeader, null, Result);
+   
+      await ((NLCSocket)sender).BlockingSend(Event);
     }
   }
 

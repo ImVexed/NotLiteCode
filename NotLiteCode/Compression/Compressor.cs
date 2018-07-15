@@ -4,12 +4,13 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace NotLiteCode.Compression
 {
   public class Compressor
   {
-    public static byte[] Compress(byte[] Bytes)
+    public static Task<Byte[]> Compress(byte[] Bytes)
     {
       using (var InputStream = new MemoryStream(Bytes))
       using (var OutputStream = new MemoryStream())
@@ -18,11 +19,11 @@ namespace NotLiteCode.Compression
         {
           InputStream.CopyTo(DeflateStream);
         }
-        return OutputStream.ToArray();
+        return Task.FromResult(OutputStream.ToArray());
       }
     }
 
-    public static byte[] Decompress(byte[] Bytes)
+    public static Task<byte[]> Decompress(byte[] Bytes)
     {
       using (var InputStream = new MemoryStream(Bytes))
       using (var OutputStream = new MemoryStream())
@@ -31,7 +32,7 @@ namespace NotLiteCode.Compression
         {
           DeflateStream.CopyTo(OutputStream);
         }
-        return OutputStream.ToArray();
+        return Task.FromResult(OutputStream.ToArray());
       }
     }
   }

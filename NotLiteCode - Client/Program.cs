@@ -2,19 +2,20 @@
 using NotLiteCode.Network;
 using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace NotLiteCode___Client
 {
   internal class Program
   {
-    private static void Test() =>
-      Client.RemoteCall("JustATest");
+    private static async Task Test() =>
+      await Client.RemoteCall("JustATest");
 
-    private static string CombineTwoStringsAndReturn(string s1, string s2) =>
-      Client.RemoteCall<string>("Pinocchio", s1, s2);
+    private static async Task<string> CombineTwoStringsAndReturn(string s1, string s2) =>
+      await Client.RemoteCall<string>("Pinocchio", s1, s2);
 
-    private static void SpeedTest() => 
-      Client.RemoteCall("ThroughputTest");
+    private static async Task SpeedTest() => 
+      await Client.RemoteCall("ThroughputTest");
     
 
     private static Client Client = null;
@@ -30,11 +31,11 @@ namespace NotLiteCode___Client
 
       Client = new Client(ClientSocket);
 
-      Client.Connect("localhost", 1337);
+      Client.Connect("localhost", 1337).Wait();
 
-      Test();
+      Test().Wait();
 
-      Console.WriteLine(CombineTwoStringsAndReturn("I'm a ", "real boy!"));
+      Console.WriteLine(CombineTwoStringsAndReturn("I'm a ", "real boy!").Result);
 
       Stopwatch t = new Stopwatch();
       t.Start();
@@ -44,7 +45,7 @@ namespace NotLiteCode___Client
       
       while (t.ElapsedMilliseconds < 1000)
       {
-        SpeedTest();
+        SpeedTest().Wait();
         l += 1;
       }
 
@@ -52,6 +53,7 @@ namespace NotLiteCode___Client
 
       Console.WriteLine("{0} calls in 1 second!", l);
       Client.Stop();
+      Test().Wait();
       Process.GetCurrentProcess().WaitForExit();
     }
 

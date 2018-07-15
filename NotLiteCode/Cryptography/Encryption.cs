@@ -3,6 +3,7 @@ using NotLiteCode.Network;
 using System;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 
 namespace NotLiteCode.Cryptography
 {
@@ -28,7 +29,7 @@ namespace NotLiteCode.Cryptography
       AESProvider.Padding = EncryptionOptions.Padding;
     }
 
-    public byte[] AES_Encrypt(byte[] Bytes)
+    public async Task<byte[]> Encrypt(byte[] Bytes)
     {
       byte[] EncryptedBytes;
       byte[] IV = new byte[IV_LENGTH];
@@ -40,7 +41,7 @@ namespace NotLiteCode.Cryptography
 
       using (var AESEncryptor = AESProvider.CreateEncryptor())
         EncryptedBytes = AESEncryptor.TransformFinalBlock(Bytes, 0, Bytes.Length);
-
+      
       byte[] PackagedBytes = new byte[EncryptedBytes.Length + IV_LENGTH + HASH_LENGTH];
 
       Array.Copy(IV, 0, PackagedBytes, 0, IV_LENGTH);
@@ -50,17 +51,17 @@ namespace NotLiteCode.Cryptography
 
       Array.Copy(EncryptedBytes, 0, PackagedBytes, IV_LENGTH + HASH_LENGTH, EncryptedBytes.Length);
 
-      return CompressorOptions.DisableCompression ? PackagedBytes : Compressor.Compress(PackagedBytes);
+      return CompressorOptions.DisableCompression ? PackagedBytes : await Compressor.Compress(PackagedBytes);
     }
 
-    public byte[] AES_Decrypt(byte[] Bytes)
+    public async Task<byte[]> Decrypt(byte[] Bytes)
     {
       byte[] DecryptedBytes;
-      byte[] DecompressedBytes = CompressorOptions.DisableCompression ? Bytes : Compressor.Decompress(Bytes);
+      byte[] DecompressedBytes = CompressorOptions.DisableCompression ? Bytes : await Compressor.Decompress(Bytes);
 
-      byte[] IV = DecompressedBytes.Slice(0, IV_LENGTH);
-      byte[] Hash = DecompressedBytes.Slice(IV_LENGTH, HASH_LENGTH);
-      byte[] EncryptedBytes = DecompressedBytes.Slice(IV_LENGTH + HASH_LENGTH, DecompressedBytes.Length - IV_LENGTH - HASH_LENGTH);
+      byte[] IV = await DecompressedBytes.Slice(0, IV_LENGTH);
+      byte[] Hash = await DecompressedBytes.Slice(IV_LENGTH, HASH_LENGTH);
+      byte[] EncryptedBytes = await DecompressedBytes.Slice(IV_LENGTH + HASH_LENGTH, DecompressedBytes.Length - IV_LENGTH - HASH_LENGTH);
 
       AESProvider.Key = this.Key;
       AESProvider.IV = IV;
