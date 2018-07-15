@@ -1,4 +1,4 @@
-﻿using NotLiteCode;
+﻿using NotLiteCode.Server;
 using System;
 
 namespace NotLiteCode___Server
@@ -16,7 +16,6 @@ namespace NotLiteCode___Server
     public void Test()
     {
       Console.WriteLine("Hey! The client invoked me!");
-      Program.Server.EnableDebug = false; // Heavy console writing will skew performance results
     }
 
     [NLCCall("ThroughputTest")]

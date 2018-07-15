@@ -8,6 +8,9 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NotLiteCode", "NotLiteCode\NotLiteCode.csproj", "{3C70272F-B54E-4B72-B913-EE2AE7432D66}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NotLiteCode - Client", "NotLiteCode - Client\NotLiteCode - Client.csproj", "{80A3F0D8-080B-430F-B4BE-173A5EF9AB6F}"
+	ProjectSection(ProjectDependencies) = postProject
+		{3C70272F-B54E-4B72-B913-EE2AE7432D66} = {3C70272F-B54E-4B72-B913-EE2AE7432D66}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

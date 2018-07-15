@@ -11,7 +11,7 @@
     <AssemblyName>NotLiteCode</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <TargetFrameworkProfile />
+    <TargetFrameworkProfile>Client</TargetFrameworkProfile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -36,13 +36,18 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Client.cs" />
-    <Compile Include="Encryption.cs" />
-    <Compile Include="Helpers.cs" />
+    <Compile Include="Client\Client.cs" />
+    <Compile Include="Compression\Compressor.cs" />
+    <Compile Include="Compression\CompressorOptions.cs" />
+    <Compile Include="Cryptography\Encryption.cs" />
+    <Compile Include="Cryptography\EncryptionOptions.cs" />
+    <Compile Include="Misc\Helpers.cs" />
+    <Compile Include="Misc\Serializer.cs" />
     <Compile Include="Network\Network.cs" />
-    <Compile Include="Network\NetworkEvent.cs" />
-    <Compile Include="Server.cs" />
+    <Compile Include="Network\NetworkEvents.cs" />
+    <Compile Include="Server\Server.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Server\ServerEvents.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

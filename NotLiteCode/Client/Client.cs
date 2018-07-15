@@ -1,4 +1,5 @@
-﻿using NotLiteCode.Encryption;
+﻿using NotLiteCode.Compression;
+using NotLiteCode.Cryptography;
 using NotLiteCode.Network;
 using System;
 
@@ -8,7 +9,8 @@ namespace NotLiteCode
   {
     private NLCSocket ClientSocket;
 
-    public bool EnableDebug { get; set; } = false;
+    public Client() : this(new NLCSocket(new EncryptionOptions(), new CompressorOptions()))
+    { }
 
     public Client(NLCSocket ClientSocket)
     {
@@ -19,13 +21,7 @@ namespace NotLiteCode
     {
       ClientSocket.Connect(ServerAddress, ServerPort);
 
-      if (Encryptor.TryReceiveHandshake(ClientSocket, out ClientSocket.Encryptor))
-      {
-        Console.WriteLine("Handshake Complete!");
-        return true;
-      }
-      else
-        return false;
+      return ClientSocket.TryReceiveHandshake();
     }
 
     public void Stop()
@@ -35,9 +31,7 @@ namespace NotLiteCode
 
     public T RemoteCall<T>(string identifier, params object[] param)
     {
-      var Event = new NetworkEvent(NetworkHeader.HEADER_MOVE, identifier, param);
-
-      Log(String.Format("Calling remote method: {0}", identifier), ConsoleColor.Cyan);
+      var Event = new NetworkEvents(NetworkHeader.HEADER_MOVE, identifier, param);
 
       if (!ClientSocket.TryBlockingSend(Event))
         throw new Exception("Failed to sent request to server!");
@@ -55,9 +49,7 @@ namespace NotLiteCode
 
     public void RemoteCall(string identifier, params object[] param)
     {
-      var Event = new NetworkEvent(NetworkHeader.HEADER_CALL, identifier, param);
-
-      Log(String.Format("Calling remote method: {0}", identifier), ConsoleColor.Cyan);
+      var Event = new NetworkEvents(NetworkHeader.HEADER_CALL, identifier, param);
 
       if (!ClientSocket.TryBlockingSend(Event))
         throw new Exception("Failed to sent request to server!");
@@ -69,18 +61,6 @@ namespace NotLiteCode
         throw new Exception("An exception was caused on the server!");
       else if (ReturnEvent.Header != NetworkHeader.HEADER_RETURN)
         throw new Exception("Unexpected error");
-    }
-
-    private void Log(string message, ConsoleColor color = ConsoleColor.Gray)
-    {
-      if (!EnableDebug)
-        return;
-
-      Console.ForegroundColor = ConsoleColor.Cyan;
-      Console.Write("[{0}] ", DateTime.Now.ToLongTimeString());
-      Console.ForegroundColor = color;
-      Console.Write("{0}{1}", message, Environment.NewLine);
-      Console.ResetColor();
     }
   }
 }

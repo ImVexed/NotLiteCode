@@ -13,8 +13,9 @@ namespace NotLiteCode___Client
     private static string CombineTwoStringsAndReturn(string s1, string s2) =>
       Client.RemoteCall<string>("Pinocchio", s1, s2);
 
-    private static void SpeedTest() =>
+    private static void SpeedTest() => 
       Client.RemoteCall("ThroughputTest");
+    
 
     private static Client Client = null;
 
@@ -22,8 +23,12 @@ namespace NotLiteCode___Client
     {
       Console.Title = "NLC Client";
 
-      var Socket = new NLCSocket();
-      Client = new Client(Socket);
+      var ClientSocket = new NLCSocket();
+
+      ClientSocket.CompressorOptions.DisableCompression = true;
+      ClientSocket.EncryptionOptions.DisableEncryption = true;
+
+      Client = new Client(ClientSocket);
 
       Client.Connect("localhost", 1337);
 
@@ -36,6 +41,7 @@ namespace NotLiteCode___Client
 
       int l = 0;
 
+      
       while (t.ElapsedMilliseconds < 1000)
       {
         SpeedTest();
@@ -47,6 +53,15 @@ namespace NotLiteCode___Client
       Console.WriteLine("{0} calls in 1 second!", l);
       Client.Stop();
       Process.GetCurrentProcess().WaitForExit();
+    }
+
+    private void Log(string message, ConsoleColor color = ConsoleColor.Gray)
+    {
+      Console.ForegroundColor = ConsoleColor.Cyan;
+      Console.Write("[{0}] ", DateTime.Now.ToLongTimeString());
+      Console.ForegroundColor = color;
+      Console.Write("{0}{1}", message, Environment.NewLine);
+      Console.ResetColor();
     }
   }
 }
