@@ -5,9 +5,6 @@
 # NotLiteCode
 A simple hackable remote code hosting platform.
 
-## Update as of 7/14/2018
-I've begun refactoring the codebase, expect much more modular code & a much better development experience. Expect slight instability as the codebase normalizes.
-
 ## What is?
 NLC (Not Lite Code) is a simplified version of LiteCode by *DragonHunter*, which allows clients to execute code on a server as if they were calling a function that was being run locally(effectively [RMI](https://en.wikipedia.org/wiki/Distributed_object_communication)(Remote Method Invokation as opposed to non-OOP [RPC](https://en.wikipedia.org/wiki/Remote_procedure_call)(Remote Procedure Call)).
 NLC intends to implement what was done in LiteCode but simplified and distilled down into 1 class (for the main logic atleast). 
@@ -49,7 +46,6 @@ Console.WriteLine(CombineTwoStringsAndReturn("I'm a ", "real boy!")); // Returns
  
 ## Planned Features:
  - NuGet Package
- - More modularization & abstraction to appropriate levels
  
 ## Original
 [LiteCode](https://gitlab.com/Dergan/LiteCode) by *DragonHunter* 
