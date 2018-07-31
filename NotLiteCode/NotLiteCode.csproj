@@ -46,7 +46,6 @@
     <Compile Include="Cryptography\EncryptionOptions.cs" />
     <Compile Include="Misc\Helpers.cs" />
     <Compile Include="Misc\Serializer.cs" />
-    <Compile Include="Misc\TaskQueue.cs" />
     <Compile Include="Network\Network.cs" />
     <Compile Include="Network\NetworkEvents.cs" />
     <Compile Include="Server\Server.cs" />

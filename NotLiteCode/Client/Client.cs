@@ -10,7 +10,7 @@ namespace NotLiteCode
   {
     private NLCSocket ClientSocket;
 
-    public Client() : this(new NLCSocket(new EncryptionOptions(), new CompressorOptions()))
+    public Client() : this(new NLCSocket(new EncryptorOptions(), new CompressorOptions()))
     { }
 
     public Client(NLCSocket ClientSocket)

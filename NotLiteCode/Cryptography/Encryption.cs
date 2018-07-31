@@ -1,5 +1,4 @@
 ﻿using NotLiteCode.Compression;
-using NotLiteCode.Network;
 using System;
 using System.Linq;
 using System.Security.Cryptography;
@@ -11,17 +10,15 @@ namespace NotLiteCode.Cryptography
   {
     private RNGCryptoServiceProvider CryptoRandom = new RNGCryptoServiceProvider();
     private AesCryptoServiceProvider AESProvider = new AesCryptoServiceProvider();
-    private CompressorOptions CompressorOptions;
 
     private const int IV_LENGTH = 16;
     private const int HASH_LENGTH = 32;
 
     private readonly byte[] Key;
 
-    public Encryptor(byte[] Key, EncryptionOptions EncryptionOptions, CompressorOptions CompressorOptions)
+    public Encryptor(byte[] Key, EncryptorOptions EncryptionOptions)
     {
       this.Key = Key;
-      this.CompressorOptions = CompressorOptions;
 
       AESProvider.KeySize = EncryptionOptions.KeySize;
       AESProvider.BlockSize = EncryptionOptions.BlockSize;
@@ -29,7 +26,7 @@ namespace NotLiteCode.Cryptography
       AESProvider.Padding = EncryptionOptions.Padding;
     }
 
-    public async Task<byte[]> Encrypt(byte[] Bytes)
+    public Task<byte[]> Encrypt(byte[] Bytes)
     {
       byte[] EncryptedBytes;
       byte[] IV = new byte[IV_LENGTH];
@@ -41,7 +38,7 @@ namespace NotLiteCode.Cryptography
 
       using (var AESEncryptor = AESProvider.CreateEncryptor())
         EncryptedBytes = AESEncryptor.TransformFinalBlock(Bytes, 0, Bytes.Length);
-      
+
       byte[] PackagedBytes = new byte[EncryptedBytes.Length + IV_LENGTH + HASH_LENGTH];
 
       Array.Copy(IV, 0, PackagedBytes, 0, IV_LENGTH);
@@ -51,17 +48,16 @@ namespace NotLiteCode.Cryptography
 
       Array.Copy(EncryptedBytes, 0, PackagedBytes, IV_LENGTH + HASH_LENGTH, EncryptedBytes.Length);
 
-      return CompressorOptions.DisableCompression ? PackagedBytes : await Compressor.Compress(PackagedBytes);
+      return Task.FromResult(PackagedBytes);
     }
 
     public async Task<byte[]> Decrypt(byte[] Bytes)
     {
       byte[] DecryptedBytes;
-      byte[] DecompressedBytes = CompressorOptions.DisableCompression ? Bytes : await Compressor.Decompress(Bytes);
-
-      byte[] IV = await DecompressedBytes.Slice(0, IV_LENGTH);
-      byte[] Hash = await DecompressedBytes.Slice(IV_LENGTH, HASH_LENGTH);
-      byte[] EncryptedBytes = await DecompressedBytes.Slice(IV_LENGTH + HASH_LENGTH, DecompressedBytes.Length - IV_LENGTH - HASH_LENGTH);
+   
+      byte[] IV = await Bytes.Slice(0, IV_LENGTH);
+      byte[] Hash = await Bytes.Slice(IV_LENGTH, HASH_LENGTH);
+      byte[] EncryptedBytes = await Bytes.Slice(IV_LENGTH + HASH_LENGTH, Bytes.Length - IV_LENGTH - HASH_LENGTH);
 
       AESProvider.Key = this.Key;
       AESProvider.IV = IV;

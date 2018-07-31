@@ -6,7 +6,7 @@ namespace NotLiteCode___Server
   public class SharedClass : IDisposable
 
   {
-    [NLCCall("JustATest")] // Any method without the [NLCCall] attribute will not be executable by the client
+    [NLCCall("Pinocchio")] // Any method without the [NLCCall] attribute will not be executable by the client
     public string CombineTwoStringsAndReturn(string s1, string s2)
     {
       return "Magical server says, s1 + s2 = " + s1 + s2;

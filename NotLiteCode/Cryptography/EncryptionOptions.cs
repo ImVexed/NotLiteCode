@@ -2,7 +2,7 @@
 
 namespace NotLiteCode.Cryptography
 {
-  public class EncryptionOptions
+  public class EncryptorOptions
   {
     public bool DisableEncryption;
 
@@ -11,10 +11,10 @@ namespace NotLiteCode.Cryptography
     public CipherMode Mode;
     public PaddingMode Padding;
 
-    public EncryptionOptions() : this(256, 128, CipherMode.CBC, PaddingMode.PKCS7)
+    public EncryptorOptions() : this(256, 128, CipherMode.CBC, PaddingMode.PKCS7)
     { }
 
-    public EncryptionOptions(int KeySize, int BlockSize, CipherMode Mode, PaddingMode Padding)
+    public EncryptorOptions(int KeySize, int BlockSize, CipherMode Mode, PaddingMode Padding)
     {
       this.KeySize = KeySize;
       this.BlockSize = BlockSize;

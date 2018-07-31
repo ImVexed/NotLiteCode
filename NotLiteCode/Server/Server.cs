@@ -1,21 +1,21 @@
 ﻿using NotLiteCode.Compression;
 using NotLiteCode.Cryptography;
-using NotLiteCode.Misc;
 using NotLiteCode.Network;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace NotLiteCode.Server
 {
   public class Server<T> where T : IDisposable, new()
   {
     public event EventHandler<OnServerClientDisconnectedEventArgs> OnServerClientDisconnected;
+
     public event EventHandler<OnServerExceptionOccurredEventArgs> OnServerExceptionOccurred;
+
     public event EventHandler<OnServerClientConnectedEventArgs> OnServerClientConnected;
+
     public event EventHandler<OnServerMethodInvokedEventArgs> OnServerMethodInvoked;
 
     private Dictionary<string, MethodInfo> RemotingMethods = new Dictionary<string, MethodInfo>();
@@ -23,16 +23,13 @@ namespace NotLiteCode.Server
     public Dictionary<EndPoint, RemoteClient<T>> Clients = new Dictionary<EndPoint, RemoteClient<T>>();
 
     public NLCSocket ServerSocket;
-    
 
-    public Server() : this(new NLCSocket(new EncryptionOptions(), new CompressorOptions()))
-    {}
+    public Server() : this(new NLCSocket(new EncryptorOptions(), new CompressorOptions()))
+    { }
 
     public Server(NLCSocket ServerSocket)
-    {    
+    {
       this.ServerSocket = ServerSocket;
-      
-      RegisterFunctions();
     }
 
     private void RegisterFunctions()
@@ -58,12 +55,12 @@ namespace NotLiteCode.Server
 
     public void Start()
     {
-      ServerSocket.OnNetworkClientDisconnected += (x, y) => OnServerClientDisconnected?.Invoke(this, new OnServerClientDisconnectedEventArgs(y.Client));
       ServerSocket.OnNetworkExceptionOccurred += (x, y) => OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(y.Exception));
       ServerSocket.OnNetworkClientConnected += OnNetworkClientConnected;
 
+      RegisterFunctions();
+
       ServerSocket.Listen();
-      ServerSocket.BeginAcceptClients();
     }
 
     public void Stop()
@@ -76,6 +73,8 @@ namespace NotLiteCode.Server
       if (await e.Client.TrySendHandshake())
       {
         var Client = new RemoteClient<T>(e.Client);
+        e.Client.OnNetworkClientDisconnected += (x, y) => OnServerClientDisconnected?.Invoke(this, new OnServerClientDisconnectedEventArgs(y.Client));
+        e.Client.OnNetworkExceptionOccurred += (x, y) => OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(y.Exception));
         e.Client.OnNetworkMessageReceived += OnNetworkMessageReceived;
         e.Client.BeginAcceptMessages();
 
@@ -120,7 +119,7 @@ namespace NotLiteCode.Server
       }
 
       var Event = new NetworkEvent(ResultHeader, null, Result);
-   
+
       await ((NLCSocket)sender).BlockingSend(Event);
     }
   }

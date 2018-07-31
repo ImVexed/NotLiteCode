@@ -5,7 +5,6 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace NotLiteCode.Network
@@ -41,29 +40,49 @@ namespace NotLiteCode.Network
     public readonly int BacklogLength;
     public readonly int ListenPort;
 
-    public EncryptionOptions EncryptionOptions;
+    public EncryptorOptions EncryptorOptions;
     public CompressorOptions CompressorOptions;
     public Encryptor Encryptor;
 
-    public NLCSocket() : this(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), new EncryptionOptions(), new CompressorOptions())
+    /// <summary>
+    /// Creates a new NLC Socket with default Socket, Compressor, & Encryptor options
+    /// </summary>
+    public NLCSocket() : this(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), new EncryptorOptions(), new CompressorOptions())
     { }
 
-    public NLCSocket(EncryptionOptions EncryptionOptions, CompressorOptions CompressorOptions) : this(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), EncryptionOptions, CompressorOptions)
+    /// <summary>
+    /// Creates a new NLC Socket with custom Encryptor & Compressor options
+    /// </summary>
+    /// <param name="EncryptorOptions">Encryptor options for the Socket to use</param>
+    /// <param name="CompressorOptions">Compressor options for the Socket to use</param>
+    public NLCSocket(EncryptorOptions EncryptorOptions, CompressorOptions CompressorOptions) : this(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), EncryptorOptions, CompressorOptions)
     { }
 
-    public NLCSocket(Socket Socket, EncryptionOptions EncryptionOptions, CompressorOptions CompressorOptions)
+    /// <summary>
+    /// Creates a new NLC Socket with custom Encryptor, Compressor, & Socket options
+    /// </summary>
+    /// <param name="Socket">Underlying socket options</param>
+    /// <param name="EncryptionOptions">Encryptor options for the Socket to use</param>
+    /// <param name="CompressorOptions">Compressor options for the Socket to use</param>
+    public NLCSocket(Socket Socket, EncryptorOptions EncryptorOptions, CompressorOptions CompressorOptions)
     {
       BaseSocket = Socket;
-      this.EncryptionOptions = EncryptionOptions;
+      this.EncryptorOptions = EncryptorOptions;
       this.CompressorOptions = CompressorOptions;
     }
 
+    /// <summary>
+    /// Close the socket
+    /// </summary>
     public void Close()
     {
       Stopping = true;
       BaseSocket.Close();
     }
 
+    /// <summary>
+    /// Send raw data over the underlying socket
+    /// </summary>
     public Task<int> Send(byte[] Buffer, int Offset, int Size, SocketFlags Flags, out SocketError SocketError)
     {
       lock (BaseSocket)
@@ -73,6 +92,9 @@ namespace NotLiteCode.Network
       }
     }
 
+    /// <summary>
+    /// Reads raw data from the underlying socket
+    /// </summary>
     public Task<int> Receive(byte[] Buffer, int Offset, int Size, SocketFlags Flags, out SocketError SocketError)
     {
       lock (BaseSocket)
@@ -83,22 +105,31 @@ namespace NotLiteCode.Network
       }
     }
 
+    /// <summary>
+    /// Begin to listen for incoming connections
+    /// </summary>
+    /// <param name="ListenPort">Network port to listen on</param>
+    /// <param name="BacklogLength">Maximum backlog length</param>
     public void Listen(int ListenPort = 1337, int BacklogLength = 5)
     {
       BaseSocket.Bind(new IPEndPoint(IPAddress.Any, ListenPort));
       BaseSocket.Listen(BacklogLength);
+      BaseSocket.BeginAccept(AcceptCallback, null);
     }
 
+    /// <summary>
+    /// Connect to another socket
+    /// </summary>
+    /// <param name="Address">Remote socket address</param>
+    /// <param name="Port">Remote socket port</param>
     public Task Connect(string Address = "localhost", int Port = 1337)
     {
       return Task.Run(() => BaseSocket.Connect(Address, Port));
     }
 
-    public void BeginAcceptClients()
-    {
-      BaseSocket.BeginAccept(AcceptCallback, null);
-    }
-
+    /// <summary>
+    /// Accept new clients loop
+    /// </summary>
     private void AcceptCallback(IAsyncResult iAR)
     {
       if (Stopping)
@@ -106,21 +137,28 @@ namespace NotLiteCode.Network
 
       var ConnectingClient = BaseSocket.EndAccept(iAR);
 
-      OnNetworkClientConnected?.Invoke(this, new OnNetworkClientConnectedEventArgs(new NLCSocket(ConnectingClient, EncryptionOptions, CompressorOptions)));
+      OnNetworkClientConnected?.Invoke(this, new OnNetworkClientConnectedEventArgs(new NLCSocket(ConnectingClient, EncryptorOptions, CompressorOptions)));
 
       BaseSocket.BeginAccept(AcceptCallback, null);
     }
 
+    /// <summary>
+    /// Begin accepting messages
+    /// </summary>
     public void BeginAcceptMessages()
     {
       BaseSocket.BeginReceive(NextBufferLength, 0, 4, SocketFlags.None, MessageRetrieveCallback, null);
     }
 
+    /// <summary>
+    /// Main message received loop
+    /// </summary>
     private async void MessageRetrieveCallback(IAsyncResult AsyncResult)
     {
       if (Stopping)
         return;
 
+      // Check the message state to see if we've been disconnected
       if (BaseSocket.EndReceive(AsyncResult, out var ErrorCode) == 0 || ErrorCode != SocketError.Success)
       {
         OnNetworkClientDisconnected?.Invoke(this, new OnNetworkClientDisconnectedEventArgs(BaseSocket?.RemoteEndPoint));
@@ -128,11 +166,13 @@ namespace NotLiteCode.Network
         return;
       }
 
+      // Take our initial first 4 bytes we've received so we know how large the actual message is
       var BufferLength = BitConverter.ToInt32(NextBufferLength, 0);
       NextBufferLength = new byte[4];
 
       var Buffer = new byte[BufferLength];
 
+      // Keep receiving until we reach the specified message size
       int BytesReceived;
       if ((BytesReceived = await this.Receive(Buffer, 0, BufferLength, SocketFlags.None, out ErrorCode)) != BufferLength || ErrorCode != SocketError.Success)
       {
@@ -140,29 +180,41 @@ namespace NotLiteCode.Network
         BaseSocket.BeginReceive(NextBufferLength, 0, 4, SocketFlags.None, MessageRetrieveCallback, null);
       }
 
-      var DecryptedBuffer = this.EncryptionOptions.DisableEncryption ? Buffer : await this.Encryptor.Decrypt(Buffer);
+      var DecompressedBuffer = this.CompressorOptions.DisableCompression ? Buffer : await Compressor.Decompress(Buffer);
 
+      // Decrypt unless explicitly disabled
+      var DecryptedBuffer = this.EncryptorOptions.DisableEncryption ? DecompressedBuffer : await this.Encryptor.Decrypt(Buffer);
+
+      // Deserialize the decrypted message into a raw object array
       var DeserializedEvent = await Serializer.Deserialize(DecryptedBuffer);
 
+      // Parse the raw object array into a formatted network event
       if (!NetworkEvent.TryParse(DeserializedEvent, out var Event))
       {
         OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception("Failed to parse network event!")));
         BaseSocket.BeginReceive(NextBufferLength, 0, 4, SocketFlags.None, MessageRetrieveCallback, null);
       }
 
+      // Notify that we've received a network event
       OnNetworkMessageReceived?.Invoke(this, new OnNetworkMessageReceivedEventArgs(Event));
 
+      // Loop
       BaseSocket.BeginReceive(NextBufferLength, 0, 4, SocketFlags.None, MessageRetrieveCallback, null);
     }
 
+    /// <summary>
+    /// Synchronously send a network event
+    /// </summary>
+    /// <param name="Event">Event to send</param>
+    /// <param name="Encrypt">Toggle encryption, this should only be used during the handshaking process</param>
     public async Task<bool> BlockingSend(NetworkEvent Event, bool Encrypt = true)
     {
       var Buffer = await Serializer.Serialize(Event.Package());
 
-      if (!this.EncryptionOptions.DisableEncryption && Encrypt)
-        Buffer = await Encryptor.Encrypt(Buffer);
-      else if (!this.CompressorOptions.DisableCompression)
+      if (!this.CompressorOptions.DisableCompression)
         Buffer = await Compressor.Compress(Buffer);
+      if (!this.EncryptorOptions.DisableEncryption && Encrypt)
+        Buffer = await Encryptor.Encrypt(Buffer);
 
       int BytesSent;
       if ((BytesSent = await this.Send(BitConverter.GetBytes(Buffer.Length), 0, 4, SocketFlags.None, out var ErrorCode)) != 4 || ErrorCode != SocketError.Success)
@@ -180,6 +232,10 @@ namespace NotLiteCode.Network
       return true;
     }
 
+    /// <summary>
+    /// Synchronously receive a network event, note that this can be interfeared with if MessageRetrieveCallback is listening for messages (in server mode)
+    /// </summary>
+    /// <param name="Decrypt">Toggle encryption, this should only be used during the handshaking process</param>
     public async Task<NetworkEvent> BlockingReceive(bool Decrypt = true)
     {
       byte[] NewBufferLength = new byte[4];
@@ -209,10 +265,10 @@ namespace NotLiteCode.Network
           BytesReceived += BytesReceiving;
       }
 
-      if (!this.EncryptionOptions.DisableEncryption && Decrypt)
-        Buffer = await Encryptor.Decrypt(Buffer);
-      else if (!this.CompressorOptions.DisableCompression)
+      if (!this.CompressorOptions.DisableCompression)
         Buffer = await Compressor.Decompress(Buffer);
+      if (!this.EncryptorOptions.DisableEncryption && Decrypt)
+        Buffer = await Encryptor.Decrypt(Buffer);
 
       var DeserializedEvent = await Serializer.Deserialize(Buffer);
 
@@ -225,6 +281,9 @@ namespace NotLiteCode.Network
       return Event;
     }
 
+    /// <summary>
+    /// Try to initiate a handshake
+    /// </summary>
     public async Task<bool> TrySendHandshake()
     {
       CngKey ECDH = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256);
@@ -257,11 +316,14 @@ namespace NotLiteCode.Network
       using (var ECDHDerive = new ECDiffieHellmanCng(ECDH))
       using (CngKey ClientPublicKey = CngKey.Import(ClientKey, CngKeyBlobFormat.EccPublicBlob))
       {
-        this.Encryptor = new Encryptor(ECDHDerive.DeriveKeyMaterial(ClientPublicKey), EncryptionOptions, CompressorOptions);
+        this.Encryptor = new Encryptor(ECDHDerive.DeriveKeyMaterial(ClientPublicKey), EncryptorOptions);
         return true;
       }
     }
 
+    /// <summary>
+    /// Try to receive a handshake
+    /// </summary>
     public async Task<bool> TryReceiveHandshake()
     {
       CngKey ECDH = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256);
@@ -285,7 +347,7 @@ namespace NotLiteCode.Network
 
       using (var ECDHDerive = new ECDiffieHellmanCng(ECDH))
       using (CngKey ServerPublicKey = CngKey.Import(ServerKey, CngKeyBlobFormat.EccPublicBlob))
-        this.Encryptor = new Encryptor(ECDHDerive.DeriveKeyMaterial(ServerPublicKey), EncryptionOptions, CompressorOptions);
+        this.Encryptor = new Encryptor(ECDHDerive.DeriveKeyMaterial(ServerPublicKey), EncryptorOptions);
 
       var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, ClientPublicKey);
 

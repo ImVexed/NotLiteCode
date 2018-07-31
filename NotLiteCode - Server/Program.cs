@@ -2,11 +2,14 @@
 using NotLiteCode.Server;
 using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace NotLiteCode___Server
 {
   internal class Program
   {
+    private static TaskQueue EventQueue = new TaskQueue();
+
     private static void Main(string[] args)
     {
       Console.Title = "NLC Server";
@@ -14,13 +17,14 @@ namespace NotLiteCode___Server
       var ServerSocket = new NLCSocket();
 
       ServerSocket.CompressorOptions.DisableCompression = true;
-      ServerSocket.EncryptionOptions.DisableEncryption = true;
+      ServerSocket.EncryptorOptions.DisableEncryption = true;
 
       var Server = new Server<SharedClass>(ServerSocket);
 
       Server.OnServerClientConnected += (x, y) => Log($"Client {y.Client} connected!", ConsoleColor.Green);
       Server.OnServerClientDisconnected += (x, y) => Log($"Client {y.Client} disconnected!", ConsoleColor.Yellow);
-      //Server.OnServerMethodInvoked += (x, y) => Log($"Client {y.Client} {(y.WasErroneous ? "failed to invoke" : "invoked")} {y.Identifier}", y.WasErroneous ? ConsoleColor.Yellow : ConsoleColor.Cyan);
+      // Waiting for a Console.Write on every remote invoke can be quite taxing, so we use a simple Event Queue to make sure it doesn't lock the socket from doing other work
+      Server.OnServerMethodInvoked += (x, y) => EventQueue.Enqueue(() => Task.Run(() => Log($"Client {y.Client} {(y.WasErroneous ? "failed to invoke" : "invoked")} {y.Identifier}", y.WasErroneous ? ConsoleColor.Yellow : ConsoleColor.Cyan)));
       Server.OnServerExceptionOccurred += (x, y) => Log($"Exception Occured! {y.Exception}", ConsoleColor.Red);
 
       Server.Start();
