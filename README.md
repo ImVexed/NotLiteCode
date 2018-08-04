@@ -25,20 +25,18 @@ public string CombineTwoStringsAndReturn(string s1, string s2)
 ```
 Program.cs
 ```C#
-var socket = new NLCSocket();
-var server = new Server<SharedClass>(socket);
+server = new Server<SharedClass>();
 server.Start();
 ```
 ### Client Code:
 Program.cs
 ```C#
 private static string CombineTwoStringsAndReturn(string s1, string s2) =>
-      Client.RemoteCall<string>("Pinocchio", s1, s2);
+      client.RemoteCall<string>("Pinocchio", s1, s2);
       
-var Socket = new NLCSocket();
-Client = new Client(Socket);
+client = new Client();
 
-Client.Connect("localhost", 1337);
+client.Connect("localhost", 1337);
 
 Console.WriteLine(CombineTwoStringsAndReturn("I'm a ", "real boy!")); // Returns "Magical server says, s1 + s2 = I'm a real boy!"
 ```
