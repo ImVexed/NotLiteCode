@@ -4,7 +4,7 @@
 [![NuGet](https://img.shields.io/nuget/v/Nuget.Core.svg)](https://www.nuget.org/packages/NotLiteCode/1.0.0)
 
 # NotLiteCode
-A simple hackable remote code hosting platform.
+A simple, hackable, remote code hosting platform.
 
 ## What is?
 NLC (Not Lite Code) is a simplified version of LiteCode by *DragonHunter*, which allows clients to execute code on a server as if they were calling a function that was being run locally(effectively [RMI](https://en.wikipedia.org/wiki/Distributed_object_communication)(Remote Method Invokation as opposed to non-OOP [RPC](https://en.wikipedia.org/wiki/Remote_procedure_call)(Remote Procedure Call)).
