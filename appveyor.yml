@@ -1,13 +1,15 @@
 version: 1.0.{build}
 image: Visual Studio 2017
 configuration:
-- Release
+  - Release
 platform: Any CPU
 shallow_clone: true
+before_build:
+  - nuget restore
 build:
   project: NotLiteCode.sln
   parallel: true
   verbosity: minimal
 artifacts:
-- path: NotLiteCode\bin\Release\NotLiteCode.dll
-  name: NotLiteCode.dll
+  - path: NotLiteCode\bin\Release\NotLiteCode.dll
+    name: NotLiteCode.dll

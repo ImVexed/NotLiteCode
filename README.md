@@ -4,7 +4,7 @@
 [![NuGet](https://img.shields.io/nuget/v/Nuget.Core.svg)](https://www.nuget.org/packages/NotLiteCode/1.0.0)
 
 # NotLiteCode
-A simple hackable remote code hosting platform.
+A simple, hackable, remote code hosting platform.
 
 ## What is?
 NLC (Not Lite Code) is a simplified version of LiteCode by *DragonHunter*, which allows clients to execute code on a server as if they were calling a function that was being run locally(effectively [RMI](https://en.wikipedia.org/wiki/Distributed_object_communication)(Remote Method Invokation as opposed to non-OOP [RPC](https://en.wikipedia.org/wiki/Remote_procedure_call)(Remote Procedure Call)).
@@ -25,20 +25,18 @@ public string CombineTwoStringsAndReturn(string s1, string s2)
 ```
 Program.cs
 ```C#
-var socket = new NLCSocket();
-var server = new Server<SharedClass>(socket);
+server = new Server<SharedClass>();
 server.Start();
 ```
 ### Client Code:
 Program.cs
 ```C#
 private static string CombineTwoStringsAndReturn(string s1, string s2) =>
-      Client.RemoteCall<string>("Pinocchio", s1, s2);
+      client.RemoteCall<string>("Pinocchio", s1, s2);
       
-var Socket = new NLCSocket();
-Client = new Client(Socket);
+client = new Client();
 
-Client.Connect("localhost", 1337);
+client.Connect("localhost", 1337);
 
 Console.WriteLine(CombineTwoStringsAndReturn("I'm a ", "real boy!")); // Returns "Magical server says, s1 + s2 = I'm a real boy!"
 ```
