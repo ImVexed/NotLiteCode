@@ -232,6 +232,8 @@ namespace NotLiteCode.Network
       return true;
     }
 
+    private const int P384_POINT_BYTELENGTH = 48;
+
     /// <summary>
     /// Synchronously receive a network event, note that this can be interfeared with if MessageRetrieveCallback is listening for messages (in server mode)
     /// </summary>
@@ -286,6 +288,47 @@ namespace NotLiteCode.Network
     /// </summary>
     public async Task<bool> TrySendHandshake()
     {
+#if NETCOREAPP2_1
+      var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP384);
+
+      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, ecdh.PublicKey.ToByteArray());
+
+      if (!await BlockingSend(ServerPublicEvent, false))
+      {
+        this.Encryptor = default(Encryptor);
+        return false;
+      }
+
+      NetworkEvent ClientPublicEvent;
+
+      if ((ClientPublicEvent = await BlockingReceive(false)) == default(NetworkEvent))
+      {
+        this.Encryptor = default(Encryptor);
+        return false;
+      }
+
+      if (ClientPublicEvent.Header != NetworkHeader.HEADER_HANDSHAKE)
+      {
+        this.Encryptor = default(Encryptor);
+        return false;
+      }
+      
+      var pubkey = ClientPublicEvent.Data as byte[];
+
+      var dummyecdh = ECDiffieHellman.Create(new ECParameters()
+      {
+        Curve = ECCurve.NamedCurves.nistP384,
+        Q = new ECPoint()
+        {
+          X = await pubkey.Slice(8, P384_POINT_BYTELENGTH),
+          Y = await pubkey.Slice(8 + P384_POINT_BYTELENGTH, P384_POINT_BYTELENGTH)
+        }
+      });
+
+      this.Encryptor = new Encryptor(ecdh.DeriveKeyMaterial(dummyecdh.PublicKey), EncryptorOptions);
+      return true;
+      
+#else
       CngKey ECDH = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256);
       byte[] ServerPublicKey = ECDH.Export(CngKeyBlobFormat.EccPublicBlob);
 
@@ -319,6 +362,7 @@ namespace NotLiteCode.Network
         this.Encryptor = new Encryptor(ECDHDerive.DeriveKeyMaterial(ClientPublicKey), EncryptorOptions);
         return true;
       }
+#endif
     }
 
     /// <summary>
@@ -326,6 +370,47 @@ namespace NotLiteCode.Network
     /// </summary>
     public async Task<bool> TryReceiveHandshake()
     {
+#if NETCOREAPP2_1
+      var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP384);
+
+      NetworkEvent ClientPublicEvent;
+
+      if ((ClientPublicEvent = await BlockingReceive(false)) == default(NetworkEvent))
+      {
+        this.Encryptor = default(Encryptor);
+        return false;
+      }
+
+      if (ClientPublicEvent.Header != NetworkHeader.HEADER_HANDSHAKE)
+      {
+        this.Encryptor = default(Encryptor);
+        return false;
+      }
+
+      var pubkey = ClientPublicEvent.Data as byte[];
+
+      var dummyecdh = ECDiffieHellman.Create(new ECParameters()
+      {
+        Curve = ECCurve.NamedCurves.nistP384,
+        Q = new ECPoint()
+        {
+          X = await pubkey.Slice(8, P384_POINT_BYTELENGTH),
+          Y = await pubkey.Slice(8 + P384_POINT_BYTELENGTH, P384_POINT_BYTELENGTH)
+        }
+      });
+
+      this.Encryptor = new Encryptor(ecdh.DeriveKeyMaterial(dummyecdh.PublicKey), EncryptorOptions);
+
+      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, ecdh.PublicKey.ToByteArray());
+
+      if (!await BlockingSend(ServerPublicEvent, false))
+      {
+        this.Encryptor = default(Encryptor);
+        return false;
+      }
+
+      return true;
+#else
       CngKey ECDH = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256);
       byte[] ClientPublicKey = ECDH.Export(CngKeyBlobFormat.EccPublicBlob);
 
@@ -358,6 +443,7 @@ namespace NotLiteCode.Network
       }
 
       return true;
+#endif
     }
   }
 }
