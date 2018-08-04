@@ -1,5 +1,6 @@
 ﻿using NotLiteCode.Server;
 using System;
+using System.Net;
 
 namespace NotLiteCode___Server
 {
@@ -12,10 +13,10 @@ namespace NotLiteCode___Server
       return "Magical server says, s1 + s2 = " + s1 + s2;
     }
 
-    [NLCCall("JustATest")]
-    public void Test()
+    [NLCCall("JustATest", true)]
+    public void Test(EndPoint Context)
     {
-      Console.WriteLine("Hey! The client invoked me!");
+      Console.WriteLine($"Hey! {Context} invoked me!");
     }
 
     [NLCCall("ThroughputTest")]

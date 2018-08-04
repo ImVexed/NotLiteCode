@@ -18,7 +18,7 @@ namespace NotLiteCode.Server
 
     public event EventHandler<OnServerMethodInvokedEventArgs> OnServerMethodInvoked;
 
-    private Dictionary<string, MethodInfo> RemotingMethods = new Dictionary<string, MethodInfo>();
+    private Dictionary<string, RemotingMethod> RemotingMethods = new Dictionary<string, RemotingMethod>();
 
     public Dictionary<EndPoint, RemoteClient<T>> Clients = new Dictionary<EndPoint, RemoteClient<T>>();
 
@@ -48,7 +48,7 @@ namespace NotLiteCode.Server
             continue;
           }
 
-          RemotingMethods.Add(thisAttr.Identifier, SharedMethod);
+          RemotingMethods.Add(thisAttr.Identifier, new RemotingMethod() { MethodInfo = SharedMethod, WithContext = thisAttr.WithContext });
         }
       }
     }
@@ -105,9 +105,16 @@ namespace NotLiteCode.Server
       }
       else
       {
+        var Parameters = new List<object>();
+
+        if (TargetMethod.WithContext)
+          Parameters.Add(RemoteEndPoint);
+
+        Parameters.AddRange((object[])e.Message.Data);
+
         try
         {
-          Result = TargetMethod.Invoke(Clients[RemoteEndPoint].SharedClass, (object[])e.Message.Data);
+          Result = TargetMethod.MethodInfo.Invoke(Clients[RemoteEndPoint].SharedClass, Parameters.ToArray());
           ResultHeader = NetworkHeader.HEADER_RETURN;
         }
         catch
@@ -129,13 +136,20 @@ namespace NotLiteCode.Server
   public class NLCCall : Attribute
   {
     public readonly string Identifier;
+    public readonly bool WithContext;
 
-    public NLCCall(string Identifier)
+    public NLCCall(string Identifier, bool WithContext = false)
     {
       this.Identifier = Identifier;
+      this.WithContext = WithContext;
     }
   }
 
+  public struct RemotingMethod
+  {
+    public MethodInfo MethodInfo;
+    public bool WithContext;
+  }
   public class RemoteClient<T> where T : IDisposable, new()
   {
     public NLCSocket Socket;
