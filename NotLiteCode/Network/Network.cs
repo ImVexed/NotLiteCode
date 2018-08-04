@@ -183,7 +183,7 @@ namespace NotLiteCode.Network
       var DecompressedBuffer = this.CompressorOptions.DisableCompression ? Buffer : await Compressor.Decompress(Buffer);
 
       // Decrypt unless explicitly disabled
-      var DecryptedBuffer = this.EncryptorOptions.DisableEncryption ? DecompressedBuffer : await this.Encryptor.Decrypt(Buffer);
+      var DecryptedBuffer = this.EncryptorOptions.DisableEncryption ? DecompressedBuffer : await this.Encryptor.Decrypt(DecompressedBuffer);
 
       // Deserialize the decrypted message into a raw object array
       var DeserializedEvent = await Serializer.Deserialize(DecryptedBuffer);
@@ -211,10 +211,10 @@ namespace NotLiteCode.Network
     {
       var Buffer = await Serializer.Serialize(Event.Package());
 
-      if (!this.CompressorOptions.DisableCompression)
-        Buffer = await Compressor.Compress(Buffer);
       if (!this.EncryptorOptions.DisableEncryption && Encrypt)
         Buffer = await Encryptor.Encrypt(Buffer);
+      if (!this.CompressorOptions.DisableCompression)
+        Buffer = await Compressor.Compress(Buffer);
 
       int BytesSent;
       if ((BytesSent = await this.Send(BitConverter.GetBytes(Buffer.Length), 0, 4, SocketFlags.None, out var ErrorCode)) != 4 || ErrorCode != SocketError.Success)

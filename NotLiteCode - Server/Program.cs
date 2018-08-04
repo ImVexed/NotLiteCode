@@ -16,8 +16,8 @@ namespace NotLiteCode___Server
 
       var ServerSocket = new NLCSocket();
 
-      ServerSocket.CompressorOptions.DisableCompression = true;
-      ServerSocket.EncryptorOptions.DisableEncryption = true;
+      //ServerSocket.CompressorOptions.DisableCompression = true;
+      //ServerSocket.EncryptorOptions.DisableEncryption = true;
 
       var Server = new Server<SharedClass>(ServerSocket);
 

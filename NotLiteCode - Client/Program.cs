@@ -25,8 +25,8 @@ namespace NotLiteCode___Client
 
       var ClientSocket = new NLCSocket();
 
-      ClientSocket.CompressorOptions.DisableCompression = true;
-      ClientSocket.EncryptorOptions.DisableEncryption = true;
+      //ClientSocket.CompressorOptions.DisableCompression = true;
+      //ClientSocket.EncryptorOptions.DisableEncryption = true;
 
       Client = new Client(ClientSocket);
 
