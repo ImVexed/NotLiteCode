@@ -76,9 +76,10 @@ namespace NotLiteCode.Server
         e.Client.OnNetworkClientDisconnected += (x, y) => OnServerClientDisconnected?.Invoke(this, new OnServerClientDisconnectedEventArgs(y.Client));
         e.Client.OnNetworkExceptionOccurred += (x, y) => OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(y.Exception));
         e.Client.OnNetworkMessageReceived += OnNetworkMessageReceived;
-        e.Client.BeginAcceptMessages();
-
+        
         Clients.Add(e.Client.BaseSocket.RemoteEndPoint, Client);
+
+        e.Client.BeginAcceptMessages();
 
         OnServerClientConnected?.Invoke(this, new OnServerClientConnectedEventArgs(e.Client.BaseSocket.RemoteEndPoint));
       }
@@ -115,7 +116,7 @@ namespace NotLiteCode.Server
           ResultHeader = NetworkHeader.HEADER_ERROR;
         }
 
-        OnServerMethodInvoked?.BeginInvoke(this, new OnServerMethodInvokedEventArgs(RemoteEndPoint, e.Message.Tag, ResultHeader == NetworkHeader.HEADER_ERROR), null, null);
+        OnServerMethodInvoked?.Invoke(this, new OnServerMethodInvokedEventArgs(RemoteEndPoint, e.Message.Tag, ResultHeader == NetworkHeader.HEADER_ERROR));
       }
 
       var Event = new NetworkEvent(ResultHeader, null, Result);
