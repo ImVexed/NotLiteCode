@@ -8,7 +8,7 @@ namespace NotLiteCode
 {
   public class Client
   {
-    private NLCSocket ClientSocket;
+    public NLCSocket ClientSocket;
 
     public Client() : this(new NLCSocket(new EncryptorOptions(), new CompressorOptions()))
     { }
