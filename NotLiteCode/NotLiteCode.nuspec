@@ -13,7 +13,7 @@
     <tags>rpc rmi remote</tags>
   </metadata>
   <files>
-    <file src="bin\Release\net452\net452\NotLiteCode.dll" target="lib\net452\NotLiteCode.dll" />
-    <file src="bin\Release\netcoreapp2.1\netcoreapp2.1\NotLiteCode.dll" target="lib\netcoreapp2.1\NotLiteCode.dll" />
+    <file src="NotLiteCode\bin\Release\net452\net452\NotLiteCode.dll" target="lib\net452\NotLiteCode.dll" />
+    <file src="NotLiteCode\bin\Release\netcoreapp2.1\netcoreapp2.1\NotLiteCode.dll" target="lib\netcoreapp2.1\NotLiteCode.dll" />
 </files>
 </package>
