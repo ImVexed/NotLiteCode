@@ -101,8 +101,6 @@ namespace NotLiteCode.Server
       Socket.OnNetworkClientDisconnected -= NetworkClientDisconnected;
       Socket.OnNetworkExceptionOccurred -= NetworkExceptionOccurred;
       Socket.OnNetworkMessageReceived -= BeingReceiveMessage;
-
-      Clients.Remove(Socket.BaseSocket.RemoteEndPoint);
     }
 
     private void BeingReceiveMessage(object sender, OnNetworkMessageReceivedEventArgs e)
