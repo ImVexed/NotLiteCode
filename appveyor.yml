@@ -18,6 +18,6 @@ deploy:
     secure: RFXCmJTnf+IcjnYPswteB2t40BH4cenUcr1fv8RD2InTbkWEVcPZWamfU/dGMsGG
   artifact: NLC-Package
 artifacts:
-  - path: '**\*.nupkg'
+  - path: '*.nupkg'
     name: NLC-Package
     type: NuGetPackage
