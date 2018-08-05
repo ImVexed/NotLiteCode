@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Reflection;
+using System.Threading.Tasks;
 
 namespace NotLiteCode.Server
 {
@@ -32,7 +33,7 @@ namespace NotLiteCode.Server
       this.ServerSocket = ServerSocket;
     }
 
-    private void RegisterFunctions()
+    public void RegisterFunctions()
     {
       foreach (MethodInfo SharedMethod in typeof(T).GetMethods())
       {
@@ -68,9 +69,14 @@ namespace NotLiteCode.Server
       ServerSocket.Close();
     }
 
-    private async void OnNetworkClientConnected(object sender, OnNetworkClientConnectedEventArgs e)
+    public void ManuallyTransferSocket(NLCSocket Socket)
     {
-      if (await e.Client.TrySendHandshake())
+      OnNetworkClientConnected(null, new OnNetworkClientConnectedEventArgs(Socket));
+    }
+
+    private void OnNetworkClientConnected(object sender, OnNetworkClientConnectedEventArgs e)
+    {
+      if (e.Client.Encryptor != null || e.Client.TrySendHandshake().Result)
       {
         var Client = new RemoteClient<T>(e.Client);
         e.Client.OnNetworkClientDisconnected += (x, y) => OnServerClientDisconnected?.Invoke(this, new OnServerClientDisconnectedEventArgs(y.Client));
