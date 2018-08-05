@@ -17,6 +17,3 @@ deploy:
   api_key:
     secure: RFXCmJTnf+IcjnYPswteB2t40BH4cenUcr1fv8RD2InTbkWEVcPZWamfU/dGMsGG
   artifact: /.*\.nupkg/
-artifacts:
-  - path: NotLiteCode\bin\Release\NotLiteCode.dll
-    name: NotLiteCode.dll
