@@ -1,5 +1,4 @@
-﻿using NotLiteCode.Compression;
-using System;
+﻿using System;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
@@ -54,7 +53,7 @@ namespace NotLiteCode.Cryptography
     public async Task<byte[]> Decrypt(byte[] Bytes)
     {
       byte[] DecryptedBytes;
-   
+
       byte[] IV = await Bytes.Slice(0, IV_LENGTH);
       byte[] Hash = await Bytes.Slice(IV_LENGTH, HASH_LENGTH);
       byte[] EncryptedBytes = await Bytes.Slice(IV_LENGTH + HASH_LENGTH, Bytes.Length - IV_LENGTH - HASH_LENGTH);

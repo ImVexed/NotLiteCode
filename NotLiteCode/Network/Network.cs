@@ -33,6 +33,8 @@ namespace NotLiteCode.Network
 
     public event EventHandler<OnNetworkDataSentEventArgs> OnNetworkDataSent;
 
+    private object BaseSocketReadLock = new object();
+    private object BaseSocketWriteLock = new object();
     private byte[] NextBufferLength = new byte[4];
     private bool Stopping = false;
 
@@ -45,9 +47,21 @@ namespace NotLiteCode.Network
     public Encryptor Encryptor;
 
     /// <summary>
+    /// Continue to BeginAccept messages
+    /// </summary>
+    public bool ContinueSubscribing = true;
+
+    /// <summary>
     /// Creates a new NLC Socket with default Socket, Compressor, & Encryptor options
     /// </summary>
     public NLCSocket() : this(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), new EncryptorOptions(), new CompressorOptions())
+    { }
+
+    /// <summary>
+    /// Creates a new NLC Socket with custom Callback option
+    /// </summary>
+    /// <param name="UseCallbacks">Bool to use callbacks</param>
+    public NLCSocket(bool UseCallbacks) : this(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), new EncryptorOptions(), new CompressorOptions())
     { }
 
     /// <summary>
@@ -85,11 +99,8 @@ namespace NotLiteCode.Network
     /// </summary>
     public Task<int> Send(byte[] Buffer, int Offset, int Size, SocketFlags Flags, out SocketError SocketError)
     {
-      lock (BaseSocket)
-      {
-        OnNetworkDataSent?.Invoke(this, new OnNetworkDataSentEventArgs(Size));
-        return Task.FromResult(BaseSocket.Send(Buffer, Offset, Size, Flags, out SocketError));
-      }
+      OnNetworkDataSent?.Invoke(this, new OnNetworkDataSentEventArgs(Size));
+      return Task.FromResult(BaseSocket.Send(Buffer, Offset, Size, Flags, out SocketError));
     }
 
     /// <summary>
@@ -97,12 +108,9 @@ namespace NotLiteCode.Network
     /// </summary>
     public Task<int> Receive(byte[] Buffer, int Offset, int Size, SocketFlags Flags, out SocketError SocketError)
     {
-      lock (BaseSocket)
-      {
-        var Length = BaseSocket.Receive(Buffer, Offset, Size, Flags, out SocketError);
-        OnNetworkDataReceived?.Invoke(this, new OnNetworkDataReceivedEventArgs(Length));
-        return Task.FromResult(Length);
-      }
+      var Length = BaseSocket.Receive(Buffer, Offset, Size, Flags, out SocketError);
+      OnNetworkDataReceived?.Invoke(this, new OnNetworkDataReceivedEventArgs(Length));
+      return Task.FromResult(Length);
     }
 
     /// <summary>
@@ -113,7 +121,7 @@ namespace NotLiteCode.Network
     public void Listen(int ListenPort = 1337, int BacklogLength = 5)
     {
       // Don't re-bind the socket if it already has live connections
-      if(!BaseSocket.Connected)
+      if (!BaseSocket.IsBound)
       {
         BaseSocket.Bind(new IPEndPoint(IPAddress.Any, ListenPort));
         BaseSocket.Listen(BacklogLength);
@@ -185,6 +193,7 @@ namespace NotLiteCode.Network
         BaseSocket.BeginReceive(NextBufferLength, 0, 4, SocketFlags.None, MessageRetrieveCallback, null);
       }
 
+      // Decompress unless explicitly disabled
       var DecompressedBuffer = this.CompressorOptions.DisableCompression ? Buffer : await Compressor.Decompress(Buffer);
 
       // Decrypt unless explicitly disabled
@@ -204,7 +213,8 @@ namespace NotLiteCode.Network
       OnNetworkMessageReceived?.Invoke(this, new OnNetworkMessageReceivedEventArgs(Event));
 
       // Loop
-      BaseSocket.BeginReceive(NextBufferLength, 0, 4, SocketFlags.None, MessageRetrieveCallback, null);
+      if (ContinueSubscribing)
+        BaseSocket.BeginReceive(NextBufferLength, 0, 4, SocketFlags.None, MessageRetrieveCallback, null);
     }
 
     /// <summary>
@@ -212,81 +222,87 @@ namespace NotLiteCode.Network
     /// </summary>
     /// <param name="Event">Event to send</param>
     /// <param name="Encrypt">Toggle encryption, this should only be used during the handshaking process</param>
-    public async Task<bool> BlockingSend(NetworkEvent Event, bool Encrypt = true)
+    public Task<bool> BlockingSend(NetworkEvent Event, bool Encrypt = true)
     {
-      var Buffer = await Serializer.Serialize(Event.Package());
-
-      if (!this.EncryptorOptions.DisableEncryption && Encrypt)
-        Buffer = await Encryptor.Encrypt(Buffer);
-      if (!this.CompressorOptions.DisableCompression)
-        Buffer = await Compressor.Compress(Buffer);
-
-      int BytesSent;
-      if ((BytesSent = await this.Send(BitConverter.GetBytes(Buffer.Length), 0, 4, SocketFlags.None, out var ErrorCode)) != 4 || ErrorCode != SocketError.Success)
+      lock (BaseSocketWriteLock)
       {
-        OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected {4} sent {BytesSent} with exception {ErrorCode}")));
-        return false;
-      }
+        var Buffer = Serializer.Serialize(Event.Package()).Result;
 
-      if ((BytesSent = await this.Send(Buffer, 0, Buffer.Length, SocketFlags.None, out ErrorCode)) != Buffer.Length || ErrorCode != SocketError.Success)
-      {
-        OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected {Buffer.Length} sent {BytesSent} with exception {ErrorCode}")));
-        return false;
-      }
+        if (!this.EncryptorOptions.DisableEncryption && Encrypt)
+          Buffer = Encryptor.Encrypt(Buffer).Result;
+        if (!this.CompressorOptions.DisableCompression)
+          Buffer = Compressor.Compress(Buffer).Result;
 
-      return true;
+        int BytesSent;
+        if ((BytesSent = this.Send(BitConverter.GetBytes(Buffer.Length), 0, 4, SocketFlags.None, out var ErrorCode).Result) != 4 || ErrorCode != SocketError.Success)
+        {
+          OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected {4} sent {BytesSent} with exception {ErrorCode}")));
+          return Task.FromResult(false);
+        }
+
+        if ((BytesSent = this.Send(Buffer, 0, Buffer.Length, SocketFlags.None, out ErrorCode).Result) != Buffer.Length || ErrorCode != SocketError.Success)
+        {
+          OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected {Buffer.Length} sent {BytesSent} with exception {ErrorCode}")));
+          return Task.FromResult(false);
+        }
+
+        return Task.FromResult(true);
+      }
     }
-
-    private const int P384_POINT_BYTELENGTH = 48;
 
     /// <summary>
     /// Synchronously receive a network event, note that this can be interfeared with if MessageRetrieveCallback is listening for messages (in server mode)
     /// </summary>
     /// <param name="Decrypt">Toggle encryption, this should only be used during the handshaking process</param>
-    public async Task<NetworkEvent> BlockingReceive(bool Decrypt = true)
+    public Task<NetworkEvent> BlockingReceive(bool Decrypt = true)
     {
-      byte[] NewBufferLength = new byte[4];
-
-      int BytesReceived;
-      if ((BytesReceived = await this.Receive(NewBufferLength, 0, 4, SocketFlags.None, out var ErrorCode)) != 4 || ErrorCode != SocketError.Success)
+      lock (BaseSocketReadLock)
       {
-        OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {4} got {BytesReceived} with exception {ErrorCode}")));
-        return default(NetworkEvent);
-      }
+        byte[] NewBufferLength = new byte[4];
 
-      var BufferLength = BitConverter.ToInt32(NewBufferLength, 0);
-      var Buffer = new byte[BufferLength];
-
-      BytesReceived = 0;
-      int BytesReceiving;
-
-      while (BytesReceived < BufferLength)
-      {
-        BytesReceiving = await this.Receive(Buffer, 0, BufferLength, SocketFlags.None, out ErrorCode);
-        if (ErrorCode != SocketError.Success)
+        int BytesReceived;
+        if ((BytesReceived = this.Receive(NewBufferLength, 0, 4, SocketFlags.None, out var ErrorCode).Result) != 4 || ErrorCode != SocketError.Success)
         {
-          OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {BufferLength} got {BytesReceived} with exception {ErrorCode}")));
-          return default(NetworkEvent);
+          OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {4} got {BytesReceived} with exception {ErrorCode}")));
+          return Task.FromResult(default(NetworkEvent));
         }
-        else
-          BytesReceived += BytesReceiving;
+
+        var BufferLength = BitConverter.ToInt32(NewBufferLength, 0);
+        var Buffer = new byte[BufferLength];
+
+        BytesReceived = 0;
+        int BytesReceiving;
+
+        while (BytesReceived < BufferLength)
+        {
+          BytesReceiving = this.Receive(Buffer, 0, BufferLength, SocketFlags.None, out ErrorCode).Result;
+          if (ErrorCode != SocketError.Success)
+          {
+            OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {BufferLength} got {BytesReceived} with exception {ErrorCode}")));
+            return Task.FromResult(default(NetworkEvent));
+          }
+          else
+            BytesReceived += BytesReceiving;
+        }
+
+        if (!this.CompressorOptions.DisableCompression)
+          Buffer = Compressor.Decompress(Buffer).Result;
+        if (!this.EncryptorOptions.DisableEncryption && Decrypt)
+          Buffer = Encryptor.Decrypt(Buffer).Result;
+
+        var DeserializedEvent = Serializer.Deserialize(Buffer).Result;
+
+        if (!NetworkEvent.TryParse(DeserializedEvent, out var Event))
+        {
+          OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception("Failed to parse network event!")));
+          return Task.FromResult(default(NetworkEvent));
+        }
+
+        return Task.FromResult(Event);
       }
-
-      if (!this.CompressorOptions.DisableCompression)
-        Buffer = await Compressor.Decompress(Buffer);
-      if (!this.EncryptorOptions.DisableEncryption && Decrypt)
-        Buffer = await Encryptor.Decrypt(Buffer);
-
-      var DeserializedEvent = await Serializer.Deserialize(Buffer);
-
-      if (!NetworkEvent.TryParse(DeserializedEvent, out var Event))
-      {
-        OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception("Failed to parse network event!")));
-        return default(NetworkEvent);
-      }
-
-      return Event;
     }
+
+    private const int P384_POINT_BYTELENGTH = 48;
 
     /// <summary>
     /// Try to initiate a handshake
@@ -296,7 +312,7 @@ namespace NotLiteCode.Network
 #if NETCOREAPP2_1
       var ecdh = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP384);
 
-      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, ecdh.PublicKey.ToByteArray());
+      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, null, ecdh.PublicKey.ToByteArray());
 
       if (!await BlockingSend(ServerPublicEvent, false))
       {
@@ -317,7 +333,7 @@ namespace NotLiteCode.Network
         this.Encryptor = default(Encryptor);
         return false;
       }
-      
+
       var pubkey = ClientPublicEvent.Data as byte[];
 
       var dummyecdh = ECDiffieHellman.Create(new ECParameters()
@@ -332,12 +348,12 @@ namespace NotLiteCode.Network
 
       this.Encryptor = new Encryptor(ecdh.DeriveKeyMaterial(dummyecdh.PublicKey), EncryptorOptions);
       return true;
-      
+
 #else
       CngKey ECDH = CngKey.Create(CngAlgorithm.ECDiffieHellmanP256);
       byte[] ServerPublicKey = ECDH.Export(CngKeyBlobFormat.EccPublicBlob);
 
-      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, ServerPublicKey);
+      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, null, ServerPublicKey);
 
       if (!await BlockingSend(ServerPublicEvent, false))
       {
@@ -406,7 +422,7 @@ namespace NotLiteCode.Network
 
       this.Encryptor = new Encryptor(ecdh.DeriveKeyMaterial(dummyecdh.PublicKey), EncryptorOptions);
 
-      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, ecdh.PublicKey.ToByteArray());
+      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, null, ecdh.PublicKey.ToByteArray());
 
       if (!await BlockingSend(ServerPublicEvent, false))
       {
@@ -439,7 +455,7 @@ namespace NotLiteCode.Network
       using (CngKey ServerPublicKey = CngKey.Import(ServerKey, CngKeyBlobFormat.EccPublicBlob))
         this.Encryptor = new Encryptor(ECDHDerive.DeriveKeyMaterial(ServerPublicKey), EncryptorOptions);
 
-      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, ClientPublicKey);
+      var ServerPublicEvent = new NetworkEvent(NetworkHeader.HEADER_HANDSHAKE, null, null, ClientPublicKey);
 
       if (!await BlockingSend(ServerPublicEvent, false))
       {

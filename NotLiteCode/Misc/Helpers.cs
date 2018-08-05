@@ -1,5 +1,7 @@
-﻿using System;
+﻿using NotLiteCode.Network;
+using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NotLiteCode
@@ -34,6 +36,12 @@ namespace NotLiteCode
 
       EnumValue = (T)Enum.Parse(typeof(T), SourceObject.ToString());
       return true;
+    }
+
+    public class TiedEventWait
+    {
+      public EventWaitHandle Event = new EventWaitHandle(false, EventResetMode.ManualReset);
+      public NetworkEvent Result;
     }
   }
 }

@@ -25,10 +25,10 @@ namespace NotLiteCode___Client
 
       var ClientSocket = new NLCSocket();
 
-      //ClientSocket.CompressorOptions.DisableCompression = true;
-      //ClientSocket.EncryptorOptions.DisableEncryption = true;
+      ClientSocket.CompressorOptions.DisableCompression = true;
+      ClientSocket.EncryptorOptions.DisableEncryption = true;
 
-      Client = new Client(ClientSocket);
+      Client = new Client(ClientSocket, true);
 
       Client.Connect("localhost", 1337).Wait();
 

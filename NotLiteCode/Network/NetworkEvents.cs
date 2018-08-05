@@ -7,12 +7,22 @@ namespace NotLiteCode.Network
   public class NetworkEvent
   {
     public readonly NetworkHeader Header;
+    public readonly string CallbackGuid;
     public readonly string Tag;
     public readonly object Data;
 
     public NetworkEvent(NetworkHeader Header, string Tag, object Data)
     {
       this.Header = Header;
+      this.CallbackGuid = null;
+      this.Tag = Tag;
+      this.Data = Data;
+    }
+
+    public NetworkEvent(NetworkHeader Header, string CallbackGuid, string Tag, object Data)
+    {
+      this.Header = Header;
+      this.CallbackGuid = CallbackGuid;
       this.Tag = Tag;
       this.Data = Data;
     }
@@ -26,14 +36,14 @@ namespace NotLiteCode.Network
       }
       else
       {
-        Event = new NetworkEvent(Header, NetworkMessage[1] as string, NetworkMessage[2]);
+        Event = new NetworkEvent(Header, NetworkMessage[1] as string, NetworkMessage[2] as string, NetworkMessage[3]);
         return true;
       }
     }
 
     public object[] Package()
     {
-      return new object[] { Header, Tag, Data };
+      return new object[] { Header, CallbackGuid, Tag, Data };
     }
   }
 

@@ -11,6 +11,12 @@ namespace NotLiteCode.Server
 {
   public class Server<T> where T : IDisposable, new()
   {
+    private void NetworkClientDisconnected(object sender, OnNetworkClientDisconnectedEventArgs e) =>
+      OnServerClientDisconnected?.Invoke(this, new OnServerClientDisconnectedEventArgs(e.Client));
+
+    private void NetworkExceptionOccurred(object sender, OnNetworkExceptionOccurredEventArgs e) =>
+      OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(e.Exception));
+
     public event EventHandler<OnServerClientDisconnectedEventArgs> OnServerClientDisconnected;
 
     public event EventHandler<OnServerExceptionOccurredEventArgs> OnServerExceptionOccurred;
@@ -31,9 +37,10 @@ namespace NotLiteCode.Server
     public Server(NLCSocket ServerSocket)
     {
       this.ServerSocket = ServerSocket;
+      RegisterFunctions();
     }
 
-    public void RegisterFunctions()
+    private void RegisterFunctions()
     {
       foreach (MethodInfo SharedMethod in typeof(T).GetMethods())
       {
@@ -59,8 +66,6 @@ namespace NotLiteCode.Server
       ServerSocket.OnNetworkExceptionOccurred += (x, y) => OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(y.Exception));
       ServerSocket.OnNetworkClientConnected += OnNetworkClientConnected;
 
-      RegisterFunctions();
-
       ServerSocket.Listen(Port);
     }
 
@@ -69,7 +74,7 @@ namespace NotLiteCode.Server
       ServerSocket.Close();
     }
 
-    public void ManuallyTransferSocket(NLCSocket Socket)
+    public void ManuallyConnectSocket(NLCSocket Socket)
     {
       OnNetworkClientConnected(null, new OnNetworkClientConnectedEventArgs(Socket));
     }
@@ -79,10 +84,10 @@ namespace NotLiteCode.Server
       if (e.Client.Encryptor != null || e.Client.TrySendHandshake().Result)
       {
         var Client = new RemoteClient<T>(e.Client);
-        e.Client.OnNetworkClientDisconnected += (x, y) => OnServerClientDisconnected?.Invoke(this, new OnServerClientDisconnectedEventArgs(y.Client));
-        e.Client.OnNetworkExceptionOccurred += (x, y) => OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(y.Exception));
-        e.Client.OnNetworkMessageReceived += OnNetworkMessageReceived;
-        
+        e.Client.OnNetworkClientDisconnected += NetworkClientDisconnected;
+        e.Client.OnNetworkExceptionOccurred += NetworkExceptionOccurred;
+        e.Client.OnNetworkMessageReceived += BeingReceiveMessage;
+
         Clients.Add(e.Client.BaseSocket.RemoteEndPoint, Client);
 
         e.Client.BeginAcceptMessages();
@@ -91,7 +96,22 @@ namespace NotLiteCode.Server
       }
     }
 
-    private async void OnNetworkMessageReceived(object sender, OnNetworkMessageReceivedEventArgs e)
+    public void DetatchFromSocket(NLCSocket Socket)
+    {
+      Socket.OnNetworkClientDisconnected -= NetworkClientDisconnected;
+      Socket.OnNetworkExceptionOccurred -= NetworkExceptionOccurred;
+      Socket.OnNetworkMessageReceived -= BeingReceiveMessage;
+
+      Clients.Remove(Socket.BaseSocket.RemoteEndPoint);
+    }
+
+    private void BeingReceiveMessage(object sender, OnNetworkMessageReceivedEventArgs e)
+    {
+      // TODO: figure out the proper way to do this
+      Task.Run(() => OnNetworkMessageReceived(sender, e));
+    }
+
+    private async Task OnNetworkMessageReceived(object sender, OnNetworkMessageReceivedEventArgs e)
     {
       if (e.Message.Header != NetworkHeader.HEADER_CALL && e.Message.Header != NetworkHeader.HEADER_MOVE)
       {
@@ -132,7 +152,7 @@ namespace NotLiteCode.Server
         OnServerMethodInvoked?.Invoke(this, new OnServerMethodInvokedEventArgs(RemoteEndPoint, e.Message.Tag, ResultHeader == NetworkHeader.HEADER_ERROR));
       }
 
-      var Event = new NetworkEvent(ResultHeader, null, Result);
+      var Event = new NetworkEvent(ResultHeader, e.Message.CallbackGuid, null, Result);
 
       await ((NLCSocket)sender).BlockingSend(Event);
     }
@@ -156,6 +176,7 @@ namespace NotLiteCode.Server
     public MethodInfo MethodInfo;
     public bool WithContext;
   }
+
   public class RemoteClient<T> where T : IDisposable, new()
   {
     public NLCSocket Socket;
