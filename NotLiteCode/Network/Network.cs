@@ -112,8 +112,13 @@ namespace NotLiteCode.Network
     /// <param name="BacklogLength">Maximum backlog length</param>
     public void Listen(int ListenPort = 1337, int BacklogLength = 5)
     {
-      BaseSocket.Bind(new IPEndPoint(IPAddress.Any, ListenPort));
-      BaseSocket.Listen(BacklogLength);
+      // Don't re-bind the socket if it already has live connections
+      if(!BaseSocket.Connected)
+      {
+        BaseSocket.Bind(new IPEndPoint(IPAddress.Any, ListenPort));
+        BaseSocket.Listen(BacklogLength);
+      }
+
       BaseSocket.BeginAccept(AcceptCallback, null);
     }
 

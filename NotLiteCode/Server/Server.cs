@@ -53,14 +53,14 @@ namespace NotLiteCode.Server
       }
     }
 
-    public void Start()
+    public void Start(int Port = 1337)
     {
       ServerSocket.OnNetworkExceptionOccurred += (x, y) => OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(y.Exception));
       ServerSocket.OnNetworkClientConnected += OnNetworkClientConnected;
 
       RegisterFunctions();
 
-      ServerSocket.Listen();
+      ServerSocket.Listen(Port);
     }
 
     public void Stop()

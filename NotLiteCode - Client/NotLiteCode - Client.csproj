@@ -36,7 +36,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="NotLiteCode, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\NotLiteCode.1.0.1\lib\net452\NotLiteCode.dll</HintPath>
+      <HintPath>..\packages\NotLiteCode.1.0.2\lib\net452\NotLiteCode.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
