@@ -44,7 +44,7 @@ Console.WriteLine(CombineTwoStringsAndReturn("I'm a ", "real boy!")); // Returns
 <img src="http://image.prntscr.com/image/3dabba40de9643e18c2362a1e0e6f9d3.png" align="center" />
  
 ## Planned Features:
-  - All features currently satisfied
+  - Linux Support (ECDH related functions seem to have intermittent support for all platforms)
 ## Notes
   - NLC now supports .Net Core 2.1
   - NLC performance is significantly increased on .Net Core vs. .Net 4.5.2 when encryption & compression are enabled
