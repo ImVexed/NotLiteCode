@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>NotLiteCode</id>
-    <version>1.1.1</version>
+    <version>1.2</version>
     <title>NotLiteCode</title>
     <authors>V-X</authors>
     <owners>V-X</owners>
@@ -13,7 +13,7 @@
     <tags>rpc rmi remote</tags>
   </metadata>
   <files>
-    <file src="bin\Release\net452\net452\NotLiteCode.dll" target="lib\net452\NotLiteCode.dll" />
+    <file src="bin\Release\net472\net472\NotLiteCode.dll" target="lib\net472\NotLiteCode.dll" />
     <file src="bin\Release\netcoreapp2.1\netcoreapp2.1\NotLiteCode.dll" target="lib\netcoreapp2.1\NotLiteCode.dll" />
 </files>
 </package>
