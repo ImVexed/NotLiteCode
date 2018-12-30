@@ -1,7 +1,7 @@
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/ImVexed/notlitecode?branch=master)](https://ci.appveyor.com/project/ImVexed/notlitecode?branch=master)
 [![Code Factor](https://www.codefactor.io/repository/github/imvexed/notlitecode/badge)](https://www.codefactor.io/repository/github/imvexed/notlitecode)
 [![GitHub license](https://img.shields.io/github/license/ImVexed/NotLiteCode.svg)](https://github.com/ImVexed/NotLiteCode/blob/master/LICENSE)
-[![NuGet](https://img.shields.io/nuget/v/Nuget.Core.svg)](https://www.nuget.org/packages/NotLiteCode/1.0.0)
+[![NuGet](https://img.shields.io/nuget/v/Nuget.Core.svg)](https://www.nuget.org/packages/NotLiteCode)
 
 # NotLiteCode
 A simple, hackable, remote code hosting platform.
@@ -43,10 +43,5 @@ Console.WriteLine(CombineTwoStringsAndReturn("I'm a ", "real boy!")); // Returns
 ## Sample Outputs
 <img src="http://image.prntscr.com/image/3dabba40de9643e18c2362a1e0e6f9d3.png" align="center" />
  
-## Planned Features:
-  - Linux Support (ECDH related functions seem to have intermittent support for all platforms)
-## Notes
-  - NLC now supports .Net Core 2.1
-  - NLC performance is significantly increased on .Net Core vs. .Net 4.5.2 when encryption & compression are enabled
 ## Original
 [LiteCode](https://gitlab.com/Dergan/LiteCode) by *DragonHunter* 
