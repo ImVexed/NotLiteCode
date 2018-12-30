@@ -113,11 +113,7 @@ namespace NotLiteCode.Network
         public void Close()
         {
             Stopping = true;
-
-            if (UseSSL)
-                SSLStream.Close();
-            else
-                BaseSocket.Close();
+            BaseSocket.Close();
         }
 
         /// <summary>
@@ -245,10 +241,14 @@ namespace NotLiteCode.Network
 
             bool StatusOK;
 
-            if (UseSSL)
-                StatusOK = SSLStream.EndRead(AsyncResult) != 0;
-            else
-                StatusOK = BaseSocket.EndReceive(AsyncResult, out var ErrorCode) != 0 && ErrorCode == SocketError.Success;
+            try
+            {
+                if (UseSSL)
+                    StatusOK = SSLStream.EndRead(AsyncResult) != 0;
+                else
+                    StatusOK = BaseSocket.EndReceive(AsyncResult, out var ErrorCode) != 0 && ErrorCode == SocketError.Success;
+            }
+            catch { StatusOK = false; }
 
             // Check the message state to see if we've been disconnected
             if (!StatusOK)

@@ -32,7 +32,7 @@ namespace NotLiteCode___Client
             // Create a socket with encryption enabled
             var ClientSocket = new NLCSocket(true, true);
 
-            Client = new Client(ClientSocket, false);
+            Client = new Client(ClientSocket, true);
 
             Client.Connect("localhost", 1337);
 
@@ -58,6 +58,7 @@ namespace NotLiteCode___Client
             Console.WriteLine("{0} calls in 1 second!", l);
 
             Client.Stop();
+            Console.ReadLine();
         }
     }
 }
