@@ -4,25 +4,25 @@ using System.Threading.Tasks;
 
 namespace NotLiteCode.Misc
 {
-  public class Serializer
-  {
-    public static Task<byte[]> Serialize(params object[] Message)
+    public class Serializer
     {
-      using (MemoryStream OutputStream = new MemoryStream())
-      {
-        BinaryFormatter Formatter = new BinaryFormatter();
-        Formatter.Serialize(OutputStream, Message);
-        return Task.FromResult(OutputStream.ToArray());
-      }
-    }
+        public static byte[] Serialize(params object[] Message)
+        {
+            using (MemoryStream OutputStream = new MemoryStream())
+            {
+                BinaryFormatter Formatter = new BinaryFormatter();
+                Formatter.Serialize(OutputStream, Message);
+                return OutputStream.ToArray();
+            }
+        }
 
-    public static Task<object[]> Deserialize(byte[] MessageData)
-    {
-      using (MemoryStream OutputStream = new MemoryStream(MessageData))
-      {
-        BinaryFormatter Formatter = new BinaryFormatter();
-        return Task.FromResult(Formatter.Deserialize(OutputStream) as object[]);
-      }
+        public static object[] Deserialize(byte[] MessageData)
+        {
+            using (MemoryStream OutputStream = new MemoryStream(MessageData))
+            {
+                BinaryFormatter Formatter = new BinaryFormatter();
+                return Formatter.Deserialize(OutputStream) as object[];
+            }
+        }
     }
-  }
 }

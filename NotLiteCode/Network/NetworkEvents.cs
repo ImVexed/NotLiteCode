@@ -4,106 +4,106 @@ using System.Net;
 
 namespace NotLiteCode.Network
 {
-  public class NetworkEvent
-  {
-    public readonly NetworkHeader Header;
-    public readonly string CallbackGuid;
-    public readonly string Tag;
-    public readonly object Data;
-
-    public NetworkEvent(NetworkHeader Header, string Tag, object Data)
+    public class NetworkEvent
     {
-      this.Header = Header;
-      this.CallbackGuid = null;
-      this.Tag = Tag;
-      this.Data = Data;
+        public readonly NetworkHeader Header;
+        public readonly string CallbackGuid;
+        public readonly string Tag;
+        public readonly object Data;
+
+        public NetworkEvent(NetworkHeader Header, string Tag, object Data)
+        {
+            this.Header = Header;
+            this.CallbackGuid = null;
+            this.Tag = Tag;
+            this.Data = Data;
+        }
+
+        public NetworkEvent(NetworkHeader Header, string CallbackGuid, string Tag, object Data)
+        {
+            this.Header = Header;
+            this.CallbackGuid = CallbackGuid;
+            this.Tag = Tag;
+            this.Data = Data;
+        }
+
+        public static bool TryParse(object[] NetworkMessage, out NetworkEvent Event)
+        {
+            if (NetworkMessage.Length < 1 || !NetworkMessage[0].TryParseEnum<NetworkHeader>(out var Header))
+            {
+                Event = default(NetworkEvent);
+                return false;
+            }
+            else
+            {
+                Event = new NetworkEvent(Header, NetworkMessage[1] as string, NetworkMessage[2] as string, NetworkMessage[3]);
+                return true;
+            }
+        }
+
+        public object[] Package()
+        {
+            return new object[] { Header, CallbackGuid, Tag, Data };
+        }
     }
 
-    public NetworkEvent(NetworkHeader Header, string CallbackGuid, string Tag, object Data)
+    public class OnNetworkMessageReceivedEventArgs : AsyncCompletedEventArgs
     {
-      this.Header = Header;
-      this.CallbackGuid = CallbackGuid;
-      this.Tag = Tag;
-      this.Data = Data;
+        public readonly NetworkEvent Message;
+
+        public OnNetworkMessageReceivedEventArgs(NetworkEvent Message) : base(null, false, null)
+        {
+            this.Message = Message;
+        }
     }
 
-    public static bool TryParse(object[] NetworkMessage, out NetworkEvent Event)
+    public class OnNetworkClientConnectedEventArgs : EventArgs
     {
-      if (NetworkMessage.Length < 1 || !NetworkMessage[0].TryParseEnum<NetworkHeader>(out var Header))
-      {
-        Event = default(NetworkEvent);
-        return false;
-      }
-      else
-      {
-        Event = new NetworkEvent(Header, NetworkMessage[1] as string, NetworkMessage[2] as string, NetworkMessage[3]);
-        return true;
-      }
+        public readonly NLCSocket Client;
+
+        public OnNetworkClientConnectedEventArgs(NLCSocket Client)
+        {
+            this.Client = Client;
+        }
     }
 
-    public object[] Package()
+    public class OnNetworkClientDisconnectedEventArgs : EventArgs
     {
-      return new object[] { Header, CallbackGuid, Tag, Data };
+        public readonly EndPoint Client;
+
+        public OnNetworkClientDisconnectedEventArgs(EndPoint Client)
+        {
+            this.Client = Client;
+        }
     }
-  }
 
-  public class OnNetworkMessageReceivedEventArgs : AsyncCompletedEventArgs
-  {
-    public readonly NetworkEvent Message;
-
-    public OnNetworkMessageReceivedEventArgs(NetworkEvent Message) : base(null, false, null)
+    public class OnNetworkExceptionOccurredEventArgs : EventArgs
     {
-      this.Message = Message;
+        public readonly Exception Exception;
+
+        public OnNetworkExceptionOccurredEventArgs(Exception Exception)
+        {
+            this.Exception = Exception;
+        }
     }
-  }
 
-  public class OnNetworkClientConnectedEventArgs : EventArgs
-  {
-    public readonly NLCSocket Client;
-
-    public OnNetworkClientConnectedEventArgs(NLCSocket Client)
+    public class OnNetworkDataReceivedEventArgs : EventArgs
     {
-      this.Client = Client;
+        public readonly int BytesReceived;
+
+        public OnNetworkDataReceivedEventArgs(int BytesReceived)
+        {
+            this.BytesReceived = BytesReceived;
+        }
     }
-  }
 
-  public class OnNetworkClientDisconnectedEventArgs : EventArgs
-  {
-    public readonly EndPoint Client;
-
-    public OnNetworkClientDisconnectedEventArgs(EndPoint Client)
+    public class OnNetworkDataSentEventArgs : EventArgs
     {
-      this.Client = Client;
+        public readonly int BytesSent;
+
+        public OnNetworkDataSentEventArgs(int BytesSent)
+        {
+            this.BytesSent = BytesSent;
+        }
     }
-  }
-
-  public class OnNetworkExceptionOccurredEventArgs : EventArgs
-  {
-    public readonly Exception Exception;
-
-    public OnNetworkExceptionOccurredEventArgs(Exception Exception)
-    {
-      this.Exception = Exception;
-    }
-  }
-
-  public class OnNetworkDataReceivedEventArgs : EventArgs
-  {
-    public readonly int BytesReceived;
-
-    public OnNetworkDataReceivedEventArgs(int BytesReceived)
-    {
-      this.BytesReceived = BytesReceived;
-    }
-  }
-
-  public class OnNetworkDataSentEventArgs : EventArgs
-  {
-    public readonly int BytesSent;
-
-    public OnNetworkDataSentEventArgs(int BytesSent)
-    {
-      this.BytesSent = BytesSent;
-    }
-  }
 }
