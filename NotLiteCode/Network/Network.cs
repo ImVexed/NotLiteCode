@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 
 namespace NotLiteCode.Network
@@ -103,7 +104,7 @@ namespace NotLiteCode.Network
                 SetupSSL();
 
                 if (UseSSL)
-                    SSLStream.AuthenticateAsServer(ServerCertificate, false, true);
+                    SSLStream.AuthenticateAsServer(ServerCertificate, clientCertificateRequired: false, checkCertificateRevocation: true, enabledSslProtocols: SslProtocols.Tls12);
             }
         }
 
@@ -132,7 +133,10 @@ namespace NotLiteCode.Network
                 else
                     Length = BaseSocket.Send(Buffer, Offset, Size, Flags, out SocketError);
             }
-            catch { SocketError = SocketError.SocketError; }
+            catch
+            {
+                SocketError = SocketError.SocketError;
+            }
 
             OnNetworkDataSent?.Invoke(this, new OnNetworkDataSentEventArgs(Length));
 
@@ -155,7 +159,10 @@ namespace NotLiteCode.Network
                 else
                     Length = BaseSocket.Receive(Buffer, Offset, Size, Flags, out SocketError);
             }
-            catch { SocketError = SocketError.SocketError; }
+            catch
+            {
+                SocketError = SocketError.SocketError;
+            }
 
             OnNetworkDataReceived?.Invoke(this, new OnNetworkDataReceivedEventArgs(Length));
 
@@ -191,7 +198,7 @@ namespace NotLiteCode.Network
             SetupSSL();
 
             if (UseSSL)
-                SSLStream.AuthenticateAsClient(Address);
+                SSLStream.AuthenticateAsClient(Address, clientCertificates: null, enabledSslProtocols: SslProtocols.Tls12, checkCertificateRevocation: true);
         }
 
         private void SetupSSL()
@@ -248,7 +255,10 @@ namespace NotLiteCode.Network
                 else
                     StatusOK = BaseSocket.EndReceive(AsyncResult, out var ErrorCode) != 0 && ErrorCode == SocketError.Success;
             }
-            catch { StatusOK = false; }
+            catch
+            {
+                StatusOK = false;
+            }
 
             // Check the message state to see if we've been disconnected
             if (!StatusOK)
