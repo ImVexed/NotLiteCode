@@ -1,9 +1,9 @@
 ﻿using NotLiteCode.Network;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Reflection;
-using System.Threading.Tasks;
 
 namespace NotLiteCode.Server
 {
@@ -82,7 +82,7 @@ namespace NotLiteCode.Server
             var Client = new RemoteClient<T>(e.Client);
             e.Client.OnNetworkClientDisconnected += NetworkClientDisconnected;
             e.Client.OnNetworkExceptionOccurred += NetworkExceptionOccurred;
-            e.Client.OnNetworkMessageReceived += BeingReceiveMessage;
+            e.Client.OnNetworkMessageReceived += OnNetworkMessageReceived;
 
             Clients.Add(e.Client.BaseSocket.RemoteEndPoint, Client);
 
@@ -95,13 +95,7 @@ namespace NotLiteCode.Server
         {
             Socket.OnNetworkClientDisconnected -= NetworkClientDisconnected;
             Socket.OnNetworkExceptionOccurred -= NetworkExceptionOccurred;
-            Socket.OnNetworkMessageReceived -= BeingReceiveMessage;
-        }
-
-        private void BeingReceiveMessage(object sender, OnNetworkMessageReceivedEventArgs e)
-        {
-            // TODO: figure out the proper way to do this
-            Task.Run(() => OnNetworkMessageReceived(sender, e));
+            Socket.OnNetworkMessageReceived -= OnNetworkMessageReceived;
         }
 
         private void OnNetworkMessageReceived(object sender, OnNetworkMessageReceivedEventArgs e)
@@ -131,18 +125,27 @@ namespace NotLiteCode.Server
 
                 Parameters.AddRange((object[])e.Message.Data);
 
+                TimeSpan Duration = default(TimeSpan);
+
                 try
                 {
+                    var sw = Stopwatch.StartNew();
+
                     Result = TargetMethod.MethodInfo.Invoke(Clients[RemoteEndPoint].SharedClass, Parameters.ToArray());
+
+                    sw.Stop();
+
+                    Duration = sw.Elapsed;
+
                     ResultHeader = NetworkHeader.HEADER_RETURN;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(new Exception($"Client caused an exception invoking {e.Message.Tag}")));
+                    OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(ex));
                     ResultHeader = NetworkHeader.HEADER_ERROR;
                 }
 
-                OnServerMethodInvoked?.Invoke(this, new OnServerMethodInvokedEventArgs(RemoteEndPoint, e.Message.Tag, ResultHeader == NetworkHeader.HEADER_ERROR));
+                OnServerMethodInvoked?.Invoke(this, new OnServerMethodInvokedEventArgs(RemoteEndPoint, e.Message.Tag, Duration, ResultHeader == NetworkHeader.HEADER_ERROR));
             }
 
             var Event = new NetworkEvent(ResultHeader, e.Message.CallbackGuid, null, Result);

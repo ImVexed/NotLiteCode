@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 
 namespace NotLiteCode___Server
 {
@@ -19,8 +20,14 @@ namespace NotLiteCode___Server
 
             Server.OnServerClientConnected += (x, y) => Log($"Client {y.Client} connected!", ConsoleColor.Green);
             Server.OnServerClientDisconnected += (x, y) => Log($"Client {y.Client} disconnected!", ConsoleColor.Yellow);
-            // Degrades performance when it tries to log 1000's of messages a second
-            //Server.OnServerMethodInvoked += (x, y) => Log($"Client {y.Client} {(y.WasErroneous ? "failed to invoke" : "invoked")} {y.Identifier}", y.WasErroneous ? ConsoleColor.Yellow : ConsoleColor.Cyan);
+            Server.OnServerMethodInvoked += (x, y) =>
+            {
+                Task.Run(() =>
+                {
+                    Log($"Client {y.Client} {(y.WasErroneous ? "failed to invoke" : "invoked")} {y.Identifier} for {y.Duration.TotalMilliseconds}ms.", y.WasErroneous ? ConsoleColor.Yellow : ConsoleColor.Cyan);
+                });
+            };
+
             Server.OnServerExceptionOccurred += (x, y) => Log($"Exception Occured! {y.Exception}", ConsoleColor.Red);
 
             Server.Start();
@@ -53,13 +60,18 @@ namespace NotLiteCode___Server
             }
         }
 
+        private static readonly object LogLock = new object();
+
         private static void Log(string message, ConsoleColor color)
         {
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.Write("[{0}] ", DateTime.Now.ToLongTimeString());
-            Console.ForegroundColor = color;
-            Console.Write("{0}{1}", message, Environment.NewLine);
-            Console.ResetColor();
+            lock (LogLock)
+            {
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.Write("[{0}] ", DateTime.Now.ToLongTimeString());
+                Console.ForegroundColor = color;
+                Console.Write("{0}{1}", message, Environment.NewLine);
+                Console.ResetColor();
+            }
         }
     }
 }

@@ -1,15 +1,14 @@
 ﻿using NotLiteCode;
 using NotLiteCode.Network;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading.Tasks;
 
 namespace NotLiteCode___Client
 {
     internal class Program
     {
         #region Remote Methods
+
         // In here we have our prototypes for the methods that exist on the server
 
         private static void Test() =>

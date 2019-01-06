@@ -27,11 +27,13 @@ namespace NotLiteCode.Server
     {
         public readonly EndPoint Client;
         public readonly string Identifier;
+        public readonly TimeSpan Duration;
         public readonly bool WasErroneous;
 
-        public OnServerMethodInvokedEventArgs(EndPoint Client, string Identifier, bool WasErroneous)
+        public OnServerMethodInvokedEventArgs(EndPoint Client, string Identifier, TimeSpan Duration, bool WasErroneous)
         {
             this.Client = Client;
+            this.Duration = Duration;
             this.Identifier = Identifier;
             this.WasErroneous = WasErroneous;
         }

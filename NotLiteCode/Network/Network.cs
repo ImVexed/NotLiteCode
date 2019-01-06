@@ -1,6 +1,5 @@
 ﻿using NotLiteCode.Misc;
 using System;
-using System.IO.Compression;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -33,8 +32,8 @@ namespace NotLiteCode.Network
 
         public event EventHandler<OnNetworkDataSentEventArgs> OnNetworkDataSent;
 
-        private object BaseSocketReadLock = new object();
-        private object BaseSocketWriteLock = new object();
+        private readonly object BaseSocketReadLock = new object();
+        private readonly object BaseSocketWriteLock = new object();
         private byte[] NextBufferLength = new byte[4];
         private bool Stopping = false;
 
@@ -42,8 +41,8 @@ namespace NotLiteCode.Network
         public readonly int BacklogLength;
         public readonly int ListenPort;
 
-        private X509Certificate2 ServerCertificate;
-        private bool AllowInsecureCerts;
+        private readonly X509Certificate2 ServerCertificate;
+        private readonly bool AllowInsecureCerts;
         private SslStream SSLStream;
 
         public readonly bool UseSSL;
