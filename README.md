@@ -7,20 +7,22 @@
 A simple, hackable, remote code hosting platform.
 
 ## What is?
-NLC (Not Lite Code) is a simplified version of LiteCode by *DragonHunter*, which allows clients to execute code on a server as if they were calling a function that was being run locally(effectively [RMI](https://en.wikipedia.org/wiki/Distributed_object_communication)(Remote Method Invokation as opposed to non-OOP [RPC](https://en.wikipedia.org/wiki/Remote_procedure_call)(Remote Procedure Call)).
-NLC intends to implement what was done in LiteCode but simplified and distilled down into 1 class (for the main logic atleast). 
+NLC (Not Lite Code) is a simplified version of LiteCode by *DragonHunter*, which provides native RPC and other useful features without any external dependencies. 
 
 ## How does this differ from traditional RPC/RMI?
-Traditionally RPC/RMI implements a stub interface and is tightly coupled. NLC however can function without a stub interface, and is loosly coupled. NLC also implements end to end encryption (alongside an Eliptic Curve Diffie-Hellman Handshake), DEFLATE compression, client isolation, and a stupidly simple implementation.  Each client that connects to the NLC server also get's a unique instance of the SharedClass, making multi-client implementations a breeze.
+Traditionally RPC/RMI implements a stub interface and is tightly coupled. NLC however can function without a stub interface by using `BinaryFormatter` to serialize & deserialize objects on the fly at runtime allowing it to be loosly coupled. NLC also allows communication over `SSLStream` for security.
+
+## How is state handled?
+NLC creates a unique instance for every client allowing you to keep stateful data alongside their functions in the `SharedClass`.
 
 ## Sample Implementation
 ### Server Code:
 SharedClass.cs
 ```C#
-[NLCCall("Pinocchio")] // Our target function on the server
-public string CombineTwoStringsAndReturn(string s1, string s2)
+[NLCCall("MagicNumber")]
+public bool IsMagicNumber(int number)
 {
-  return "Magical server says, s1 + s2 = " + s1 + s2;
+  return number == 7;
 }
 ```
 Program.cs
@@ -31,14 +33,15 @@ server.Start();
 ### Client Code:
 Program.cs
 ```C#
-private static string CombineTwoStringsAndReturn(string s1, string s2) =>
-      client.RemoteCall<string>("Pinocchio", s1, s2);
+public static bool IsMagicNumber(int number) =>
+      client.RemoteCall<bool>("MagicNumber", number);
       
 client = new Client();
 
 client.Connect("localhost", 1337);
 
-Console.WriteLine(CombineTwoStringsAndReturn("I'm a ", "real boy!")); // Returns "Magical server says, s1 + s2 = I'm a real boy!"
+Console.WriteLine(IsMagicNumber(-10)); // False
+Console.WriteLine(IsMagicNumber(7));   // True
 ```
 ## Sample Outputs
 <img src="http://image.prntscr.com/image/3dabba40de9643e18c2362a1e0e6f9d3.png" align="center" />
