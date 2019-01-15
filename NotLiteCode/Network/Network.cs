@@ -100,10 +100,12 @@ namespace NotLiteCode.Network
 
             if (BaseSocket.Connected)
             {
-                SetupSSL();
-
                 if (UseSSL)
+                {
+                    SetupSSL();
+
                     SSLStream.AuthenticateAsServer(ServerCertificate, clientCertificateRequired: false, checkCertificateRevocation: true, enabledSslProtocols: SslProtocols.Tls12);
+                }
             }
         }
 
@@ -194,21 +196,19 @@ namespace NotLiteCode.Network
         {
             BaseSocket.Connect(Address, Port);
 
-            SetupSSL();
-
             if (UseSSL)
+            {
+                SetupSSL();
                 SSLStream.AuthenticateAsClient(Address, clientCertificates: null, enabledSslProtocols: SslProtocols.Tls12, checkCertificateRevocation: true);
+            }
         }
 
         private void SetupSSL()
         {
-            if (UseSSL)
-            {
-                if (AllowInsecureCerts)
-                    SSLStream = new SslStream(new NetworkStream(BaseSocket), false, new RemoteCertificateValidationCallback((w, x, y, z) => true), null);
-                else
-                    SSLStream = new SslStream(new NetworkStream(BaseSocket), false);
-            }
+            if (AllowInsecureCerts)
+                SSLStream = new SslStream(new NetworkStream(BaseSocket), false, new RemoteCertificateValidationCallback((w, x, y, z) => true), null);
+            else
+                SSLStream = new SslStream(new NetworkStream(BaseSocket), false);
         }
 
         /// <summary>
@@ -273,17 +273,34 @@ namespace NotLiteCode.Network
 
             var Buffer = new byte[BufferLength];
 
-            // Keep receiving until we reach the specified message size
-            int BytesReceived;
-            if ((BytesReceived = this.Receive(Buffer, 0, BufferLength, SocketFlags.None, out var ReadCode)) != BufferLength || ReadCode != SocketError.Success)
+            var BytesReceived = 0;
+
+            while (BytesReceived < BufferLength)
             {
-                OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {BufferLength} got {BytesReceived} with exception {ReadCode}")));
-                BeginAcceptMessages();
-                return;
+                var BytesReceiving = this.Receive(Buffer, BytesReceived, BufferLength - BytesReceived, SocketFlags.None, out var ErrorCode);
+                if (ErrorCode != SocketError.Success)
+                {
+                    OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {BufferLength} got {BytesReceived} with exception {ErrorCode}")));
+                    BeginAcceptMessages();
+                    return;
+                }
+                else
+                    BytesReceived += BytesReceiving;
             }
 
             // Deserialize the decrypted message into a raw object array
-            var DeserializedEvent = Serializer.Deserialize(Buffer);
+            object[] DeserializedEvent;
+
+            try
+            {
+                DeserializedEvent = Serializer.Deserialize(Buffer);
+            }
+            catch
+            {
+                OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Corrupted data received!")));
+                BeginAcceptMessages();
+                return;
+            }
 
             // Parse the raw object array into a formatted network event
             if (!NetworkEvent.TryParse(DeserializedEvent, out var Event))
@@ -349,11 +366,9 @@ namespace NotLiteCode.Network
                 var Buffer = new byte[BufferLength];
 
                 BytesReceived = 0;
-                int BytesReceiving;
-
                 while (BytesReceived < BufferLength)
                 {
-                    BytesReceiving = this.Receive(Buffer, 0, BufferLength, SocketFlags.None, out ErrorCode);
+                    var BytesReceiving = this.Receive(Buffer, BytesReceived, BufferLength - BytesReceived, SocketFlags.None, out ErrorCode);
                     if (ErrorCode != SocketError.Success)
                     {
                         OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {BufferLength} got {BytesReceived} with exception {ErrorCode}")));

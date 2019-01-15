@@ -11,7 +11,7 @@ namespace NotLiteCode
         public NLCSocket ClientSocket;
         public bool UseCallbacks;
 
-        private object CallLock = new object();
+        private readonly object CallLock = new object();
 
         public Client() : this(new NLCSocket(), false)
         { }

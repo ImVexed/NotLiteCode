@@ -5,7 +5,6 @@ using System.Net;
 namespace NotLiteCode___Server
 {
     public class SharedClass : IDisposable
-
     {
         [NLCCall("Pinocchio")] // Any method without the [NLCCall] attribute will not be executable by the client
         public string CombineTwoStringsAndReturn(string s1, string s2)

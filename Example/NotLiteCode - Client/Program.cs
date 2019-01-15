@@ -2,6 +2,7 @@
 using NotLiteCode.Network;
 using System;
 using System.Diagnostics;
+using System.Threading;
 
 namespace NotLiteCode___Client
 {
@@ -18,7 +19,7 @@ namespace NotLiteCode___Client
           Client.RemoteCall<string>("Pinocchio", s1, s2);
 
         private static void SpeedTest() =>
-          Client.RemoteCall("ThroughputTest");
+            Client.RemoteCall("ThroughputTest");
 
         #endregion Remote Methods
 
@@ -31,7 +32,7 @@ namespace NotLiteCode___Client
             // Create a socket with encryption enabled
             var ClientSocket = new NLCSocket(true, true);
 
-            Client = new Client(ClientSocket, true);
+            Client = new Client(ClientSocket);
 
             Client.Connect("localhost", 1337);
 
