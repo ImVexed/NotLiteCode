@@ -15,6 +15,9 @@ Traditionally RPC/RMI implements a stub interface and is tightly coupled. NLC ho
 ## How is state handled?
 NLC creates a unique instance for every client allowing you to keep stateful data alongside their functions in the `SharedClass`.
 
+## How is concurrency handled?
+As of 1.4 NLC's networking core is now asynchronous and will invoke calls in a new Task once the data is received. Thus any synchronization must either be ensured in the client invoking the methods or inside the SharedClass functions themselves.
+
 ## Sample Implementation
 ### Server Code:
 SharedClass.cs
@@ -33,15 +36,15 @@ server.Start();
 ### Client Code:
 Program.cs
 ```C#
-public static bool IsMagicNumber(int number) =>
-      client.RemoteCall<bool>("MagicNumber", number);
+public static async Task<bool> IsMagicNumber(int number) =>
+      await client.RemoteCall<bool>("MagicNumber", number);
       
 client = new Client();
 
 client.Connect("localhost", 1337);
 
-Console.WriteLine(IsMagicNumber(-10)); // False
-Console.WriteLine(IsMagicNumber(7));   // True
+Console.WriteLine(await IsMagicNumber(-10)); // False
+Console.WriteLine(await IsMagicNumber(7));   // True
 ```
 ## Sample Outputs
 <img src="http://image.prntscr.com/image/3dabba40de9643e18c2362a1e0e6f9d3.png" align="center" />
