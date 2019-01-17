@@ -23,7 +23,7 @@ namespace NotLiteCode___Server
             Server.OnServerClientDisconnected += (x, y) => Log($"Client {y.Client} disconnected!", ConsoleColor.Yellow);
             Server.OnServerExceptionOccurred += (x, y) => Log($"Exception Occured! {y.Exception}", ConsoleColor.Red);
 
-            // This line intentionally left commented due to excessive thread contestion during performance testing (1000's of calls a second) which starves other performance critical threads thus skewing performance results
+            // This line intentionally left commented due to excessive lock contestion during performance testing (1000's of calls a second) which starves other performance critical threads thus skewing performance results
             //Server.OnServerMethodInvoked += (x, y) => Log($"Client {y.Client} {(y.WasErroneous ? "failed to invoke" : "invoked")} {y.Identifier} for {y.Duration.TotalMilliseconds}ms.", y.WasErroneous ? ConsoleColor.Yellow : ConsoleColor.Cyan);
 
             Server.Start();

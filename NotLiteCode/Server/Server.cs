@@ -53,8 +53,11 @@ namespace NotLiteCode.Server
                     }
 
                     var IsAsync = SharedMethod.GetCustomAttribute(typeof(AsyncStateMachineAttribute)) is AsyncStateMachineAttribute;
-                    var MethodType = SharedMethod.GetType();
-                    var HasAsyncResult = MethodType.IsGenericType && MethodType.GetGenericTypeDefinition() == typeof(Task<>);
+                    var ReturnType = SharedMethod.ReturnType;
+                    var HasAsyncResult = ReturnType.IsGenericType && ReturnType.GetGenericTypeDefinition() == typeof(Task<>);
+
+                    if (!HasAsyncResult && IsAsync && ReturnType != typeof(Task))
+                        throw new Exception($"Shared function {NLCAttribute.Identifier} is asynchronous but does not return a Task!");
 
                     RemotingMethods.Add(NLCAttribute.Identifier, new RemotingMethod() {
                         MethodInfo = SharedMethod,
