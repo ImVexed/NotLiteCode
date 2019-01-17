@@ -2,7 +2,7 @@
 using NotLiteCode.Network;
 using System;
 using System.Diagnostics;
-using System.Threading;
+using System.Threading.Tasks;
 
 namespace NotLiteCode___Client
 {
@@ -12,20 +12,25 @@ namespace NotLiteCode___Client
 
         // In here we have our prototypes for the methods that exist on the server
 
-        private static void Test() =>
-          Client.RemoteCall("JustATest");
+        private static async Task Test() =>
+          await Client.RemoteCall("JustATest");
 
-        private static string CombineTwoStringsAndReturn(string s1, string s2) =>
-          Client.RemoteCall<string>("Pinocchio", s1, s2);
+        private static async Task<string> CombineTwoStringsAndReturn(string s1, string s2) =>
+          await Client.RemoteCall<string>("Pinocchio", s1, s2);
 
-        private static void SpeedTest() =>
-            Client.RemoteCall("ThroughputTest");
+        private static async Task SpeedTest() =>
+          await Client.RemoteCall("ThroughputTest");
 
         #endregion Remote Methods
 
         private static Client Client = null;
 
         private static void Main(string[] args)
+        {
+            Main().Wait();
+        }
+
+        private static async Task Main()
         {
             Console.Title = "NLC Client";
 
@@ -37,10 +42,10 @@ namespace NotLiteCode___Client
             Client.Connect("localhost", 1337);
 
             // Invoke our first remote method
-            Test();
+            await Test();
 
             // Invoke a method that returns a string
-            Console.WriteLine(CombineTwoStringsAndReturn("I'm a ", "real boy!"));
+            Console.WriteLine(await CombineTwoStringsAndReturn("I'm a ", "real boy!"));
 
             int l = 0;
 
@@ -49,7 +54,7 @@ namespace NotLiteCode___Client
             // Execute a method as many times as we can in 1 second
             while (t.ElapsedMilliseconds < 1000)
             {
-                SpeedTest();
+                await SpeedTest();
                 l++;
             }
 

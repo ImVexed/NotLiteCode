@@ -5,6 +5,8 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NotLiteCode.Network
 {
@@ -32,8 +34,8 @@ namespace NotLiteCode.Network
 
         public event EventHandler<OnNetworkDataSentEventArgs> OnNetworkDataSent;
 
-        private readonly object BaseSocketReadLock = new object();
-        private readonly object BaseSocketWriteLock = new object();
+        private readonly SemaphoreSlim BaseSocketReadSem = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim BaseSocketWriteSem = new SemaphoreSlim(1, 1);
         private byte[] NextBufferLength = new byte[4];
         private bool Stopping = false;
 
@@ -139,7 +141,7 @@ namespace NotLiteCode.Network
                 SocketError = SocketError.SocketError;
             }
 
-            OnNetworkDataSent?.Invoke(this, new OnNetworkDataSentEventArgs(Length));
+            OnNetworkDataSent?.Start(this, new OnNetworkDataSentEventArgs(Length));
 
             return Length;
         }
@@ -165,7 +167,7 @@ namespace NotLiteCode.Network
                 SocketError = SocketError.SocketError;
             }
 
-            OnNetworkDataReceived?.Invoke(this, new OnNetworkDataReceivedEventArgs(Length));
+            OnNetworkDataReceived?.Start(this, new OnNetworkDataReceivedEventArgs(Length));
 
             return Length;
         }
@@ -221,7 +223,7 @@ namespace NotLiteCode.Network
 
             var ConnectingClient = BaseSocket.EndAccept(iAR);
 
-            OnNetworkClientConnected?.Invoke(this, new OnNetworkClientConnectedEventArgs(new NLCSocket(ConnectingClient, UseSSL, AllowInsecureCerts, ServerCertificate)));
+            OnNetworkClientConnected?.Start(this, new OnNetworkClientConnectedEventArgs(new NLCSocket(ConnectingClient, UseSSL, AllowInsecureCerts, ServerCertificate)));
 
             BaseSocket.BeginAccept(AcceptCallback, null);
         }
@@ -262,7 +264,7 @@ namespace NotLiteCode.Network
             // Check the message state to see if we've been disconnected
             if (!StatusOK)
             {
-                OnNetworkClientDisconnected?.Invoke(this, new OnNetworkClientDisconnectedEventArgs(BaseSocket?.RemoteEndPoint));
+                OnNetworkClientDisconnected?.Start(this, new OnNetworkClientDisconnectedEventArgs(BaseSocket?.RemoteEndPoint));
                 this.Close();
                 return;
             }
@@ -280,7 +282,7 @@ namespace NotLiteCode.Network
                 var BytesReceiving = this.Receive(Buffer, BytesReceived, BufferLength - BytesReceived, SocketFlags.None, out var ErrorCode);
                 if (ErrorCode != SocketError.Success)
                 {
-                    OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {BufferLength} got {BytesReceived} with exception {ErrorCode}")));
+                    OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {BufferLength} got {BytesReceived} with exception {ErrorCode}")));
                     BeginAcceptMessages();
                     return;
                 }
@@ -297,7 +299,7 @@ namespace NotLiteCode.Network
             }
             catch
             {
-                OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Corrupted data received!")));
+                OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Corrupted data received!")));
                 BeginAcceptMessages();
                 return;
             }
@@ -305,13 +307,13 @@ namespace NotLiteCode.Network
             // Parse the raw object array into a formatted network event
             if (!NetworkEvent.TryParse(DeserializedEvent, out var Event))
             {
-                OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception("Failed to parse network event!")));
+                OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception("Failed to parse network event!")));
                 BeginAcceptMessages();
                 return;
             }
 
             // Notify that we've received a network event
-            OnNetworkMessageReceived?.Invoke(this, new OnNetworkMessageReceivedEventArgs(Event));
+            OnNetworkMessageReceived?.Start(this, new OnNetworkMessageReceivedEventArgs(Event));
 
             // Loop
             if (ContinueSubscribing)
@@ -323,71 +325,73 @@ namespace NotLiteCode.Network
         /// </summary>
         /// <param name="Event">Event to send</param>
         /// <param name="Encrypt">Toggle encryption, this should only be used during the handshaking process</param>
-        public bool BlockingSend(NetworkEvent Event, bool Encrypt = true)
+        public async Task<bool> BlockingSend(NetworkEvent Event, bool Encrypt = true)
         {
-            lock (BaseSocketWriteLock)
+            await BaseSocketWriteSem.WaitAsync();
+
+            var Buffer = Serializer.Serialize(Event.Package());
+
+            int BytesSent;
+            if ((BytesSent = this.Send(BitConverter.GetBytes(Buffer.Length), 0, 4, SocketFlags.None, out var ErrorCode)) != 4 || ErrorCode != SocketError.Success)
             {
-                var Buffer = Serializer.Serialize(Event.Package());
-
-                int BytesSent;
-                if ((BytesSent = this.Send(BitConverter.GetBytes(Buffer.Length), 0, 4, SocketFlags.None, out var ErrorCode)) != 4 || ErrorCode != SocketError.Success)
-                {
-                    OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected 4 sent {BytesSent} with exception {ErrorCode}")));
-                    return false;
-                }
-
-                if ((BytesSent = this.Send(Buffer, 0, Buffer.Length, SocketFlags.None, out ErrorCode)) != Buffer.Length || ErrorCode != SocketError.Success)
-                {
-                    OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected {Buffer.Length} sent {BytesSent} with exception {ErrorCode}")));
-                    return false;
-                }
-
-                return true;
+                OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected 4 sent {BytesSent} with exception {ErrorCode}")));
+                return false;
             }
+
+            if ((BytesSent = this.Send(Buffer, 0, Buffer.Length, SocketFlags.None, out ErrorCode)) != Buffer.Length || ErrorCode != SocketError.Success)
+            {
+                OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected {Buffer.Length} sent {BytesSent} with exception {ErrorCode}")));
+                return false;
+            }
+
+            BaseSocketWriteSem.Release();
+
+            return true;
         }
 
         /// <summary>
         /// Synchronously receive a network event, note that this can interfeared with MessageRetrieveCallback if the base socket is already blocking
         /// </summary>
-        public NetworkEvent BlockingReceive()
+        public async Task<NetworkEvent> BlockingReceive()
         {
-            lock (BaseSocketReadLock)
+            await BaseSocketReadSem.WaitAsync();
+
+            byte[] NewBufferLength = new byte[4];
+
+            int BytesReceived;
+            if ((BytesReceived = this.Receive(NewBufferLength, 0, 4, SocketFlags.None, out var ErrorCode)) != 4 || ErrorCode != SocketError.Success)
             {
-                byte[] NewBufferLength = new byte[4];
-
-                int BytesReceived;
-                if ((BytesReceived = this.Receive(NewBufferLength, 0, 4, SocketFlags.None, out var ErrorCode)) != 4 || ErrorCode != SocketError.Success)
-                {
-                    OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {4} got {BytesReceived} with exception {ErrorCode}")));
-                    return default(NetworkEvent);
-                }
-
-                var BufferLength = BitConverter.ToInt32(NewBufferLength, 0);
-                var Buffer = new byte[BufferLength];
-
-                BytesReceived = 0;
-                while (BytesReceived < BufferLength)
-                {
-                    var BytesReceiving = this.Receive(Buffer, BytesReceived, BufferLength - BytesReceived, SocketFlags.None, out ErrorCode);
-                    if (ErrorCode != SocketError.Success)
-                    {
-                        OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {BufferLength} got {BytesReceived} with exception {ErrorCode}")));
-                        return default(NetworkEvent);
-                    }
-                    else
-                        BytesReceived += BytesReceiving;
-                }
-
-                var DeserializedEvent = Serializer.Deserialize(Buffer);
-
-                if (!NetworkEvent.TryParse(DeserializedEvent, out var Event))
-                {
-                    OnNetworkExceptionOccurred?.Invoke(this, new OnNetworkExceptionOccurredEventArgs(new Exception("Failed to parse network event!")));
-                    return default(NetworkEvent);
-                }
-
-                return Event;
+                OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {4} got {BytesReceived} with exception {ErrorCode}")));
+                return default(NetworkEvent);
             }
+
+            var BufferLength = BitConverter.ToInt32(NewBufferLength, 0);
+            var Buffer = new byte[BufferLength];
+
+            BytesReceived = 0;
+            while (BytesReceived < BufferLength)
+            {
+                var BytesReceiving = this.Receive(Buffer, BytesReceived, BufferLength - BytesReceived, SocketFlags.None, out ErrorCode);
+                if (ErrorCode != SocketError.Success)
+                {
+                    OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data received from Client! Expected {BufferLength} got {BytesReceived} with exception {ErrorCode}")));
+                    return default(NetworkEvent);
+                }
+                else
+                    BytesReceived += BytesReceiving;
+            }
+
+            var DeserializedEvent = Serializer.Deserialize(Buffer);
+
+            if (!NetworkEvent.TryParse(DeserializedEvent, out var Event))
+            {
+                OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception("Failed to parse network event!")));
+                return default(NetworkEvent);
+            }
+
+            BaseSocketReadSem.Release();
+
+            return Event;
         }
     }
 }

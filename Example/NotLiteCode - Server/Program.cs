@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NotLiteCode___Server
@@ -20,15 +21,10 @@ namespace NotLiteCode___Server
 
             Server.OnServerClientConnected += (x, y) => Log($"Client {y.Client} connected!", ConsoleColor.Green);
             Server.OnServerClientDisconnected += (x, y) => Log($"Client {y.Client} disconnected!", ConsoleColor.Yellow);
-            Server.OnServerMethodInvoked += (x, y) =>
-            {
-                Task.Run(() =>
-                {
-                    Log($"Client {y.Client} {(y.WasErroneous ? "failed to invoke" : "invoked")} {y.Identifier} for {y.Duration.TotalMilliseconds}ms.", y.WasErroneous ? ConsoleColor.Yellow : ConsoleColor.Cyan);
-                });
-            };
-
             Server.OnServerExceptionOccurred += (x, y) => Log($"Exception Occured! {y.Exception}", ConsoleColor.Red);
+
+            // This line intentionally left commented due to excessive thread contestion during performance testing (1000's of calls a second) which starves other performance critical threads thus skewing performance results
+            //Server.OnServerMethodInvoked += (x, y) => Log($"Client {y.Client} {(y.WasErroneous ? "failed to invoke" : "invoked")} {y.Identifier} for {y.Duration.TotalMilliseconds}ms.", y.WasErroneous ? ConsoleColor.Yellow : ConsoleColor.Cyan);
 
             Server.Start();
 
@@ -60,18 +56,19 @@ namespace NotLiteCode___Server
             }
         }
 
-        private static readonly object LogLock = new object();
+        private static readonly SemaphoreSlim LogSem = new SemaphoreSlim(1, 1);
 
-        private static void Log(string message, ConsoleColor color)
+        private static async void Log(string message, ConsoleColor color)
         {
-            lock (LogLock)
-            {
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.Write("[{0}] ", DateTime.Now.ToLongTimeString());
-                Console.ForegroundColor = color;
-                Console.Write("{0}{1}", message, Environment.NewLine);
-                Console.ResetColor();
-            }
+            await LogSem.WaitAsync();
+
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.Write("[{0}] ", DateTime.Now.ToLongTimeString());
+            Console.ForegroundColor = color;
+            Console.Write("{0}{1}", message, Environment.NewLine);
+            Console.ResetColor();
+
+            LogSem.Release();
         }
     }
 }

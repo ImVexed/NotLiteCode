@@ -1,6 +1,8 @@
 ﻿using NotLiteCode.Network;
 using System;
 using System.Collections.Concurrent;
+using System.Threading;
+using System.Threading.Tasks;
 using static NotLiteCode.Helpers;
 
 namespace NotLiteCode
@@ -11,7 +13,7 @@ namespace NotLiteCode
         public NLCSocket ClientSocket;
         public bool UseCallbacks;
 
-        private readonly object CallLock = new object();
+        private readonly SemaphoreSlim CallSem = new SemaphoreSlim(1, 1);
 
         public Client() : this(new NLCSocket(), false)
         { }
@@ -63,7 +65,7 @@ namespace NotLiteCode
             ClientSocket.Close();
         }
 
-        public T RemoteCall<T>(string identifier, params object[] param)
+        public async Task<T> RemoteCall<T>(string identifier, params object[] param)
         {
             if (UseCallbacks)
             {
@@ -73,7 +75,7 @@ namespace NotLiteCode
 
                 var Event = new NetworkEvent(NetworkHeader.HEADER_MOVE, CallbackGuid, identifier, param);
 
-                if (!ClientSocket.BlockingSend(Event))
+                if (!await ClientSocket.BlockingSend(Event))
                     throw new Exception("Failed to sent request to server!");
 
                 Callbacks[CallbackGuid].Event.WaitOne();
@@ -85,28 +87,31 @@ namespace NotLiteCode
                 return (T)Result.Data;
             }
             else
-                lock (CallLock)
-                {
-                    var Event = new NetworkEvent(NetworkHeader.HEADER_MOVE, identifier, param);
+            {
+                await CallSem.WaitAsync();
 
-                    if (!ClientSocket.BlockingSend(Event))
-                        throw new Exception("Failed to sent request to server!");
+                var Event = new NetworkEvent(NetworkHeader.HEADER_MOVE, identifier, param);
 
-                    NetworkEvent Result;
+                if (!await ClientSocket.BlockingSend(Event))
+                    throw new Exception("Failed to sent request to server!");
 
-                    if ((Result = ClientSocket.BlockingReceive()) == default(NetworkEvent))
-                        throw new Exception("Failed to receive result from server!");
+                NetworkEvent Result;
 
-                    if (Result.Header == NetworkHeader.HEADER_ERROR)
-                        throw new Exception("An exception was caused on the server!");
-                    else if (Result.Header != NetworkHeader.HEADER_RETURN)
-                        throw new Exception("Unexpected error");
+                if ((Result = await ClientSocket.BlockingReceive()) == default(NetworkEvent))
+                    throw new Exception("Failed to receive result from server!");
 
-                    return (T)Result.Data;
-                }
+                if (Result.Header == NetworkHeader.HEADER_ERROR)
+                    throw new Exception("An exception was caused on the server!");
+                else if (Result.Header != NetworkHeader.HEADER_RETURN)
+                    throw new Exception("Unexpected error");
+
+                CallSem.Release();
+
+                return (T)Result.Data;
+            }
         }
 
-        public void RemoteCall(string identifier, params object[] param)
+        public async Task RemoteCall(string identifier, params object[] param)
         {
             if (UseCallbacks)
             {
@@ -116,7 +121,7 @@ namespace NotLiteCode
 
                 var Event = new NetworkEvent(NetworkHeader.HEADER_CALL, CallbackID, identifier, param);
 
-                if (!ClientSocket.BlockingSend(Event))
+                if (!await ClientSocket.BlockingSend(Event))
                     throw new Exception("Failed to sent request to server!");
 
                 Callbacks[CallbackID].Event.WaitOne();
@@ -124,23 +129,26 @@ namespace NotLiteCode
                 Callbacks.TryRemove(CallbackID, out _);
             }
             else
-                lock (CallLock)
-                {
-                    var Event = new NetworkEvent(NetworkHeader.HEADER_CALL, identifier, param);
+            {
+                await CallSem.WaitAsync();
 
-                    if (!ClientSocket.BlockingSend(Event))
-                        throw new Exception("Failed to sent request to server!");
+                var Event = new NetworkEvent(NetworkHeader.HEADER_CALL, identifier, param);
 
-                    NetworkEvent ReturnEvent;
+                if (!await ClientSocket.BlockingSend(Event))
+                    throw new Exception("Failed to sent request to server!");
 
-                    if ((ReturnEvent = ClientSocket.BlockingReceive()) == default(NetworkEvent))
-                        throw new Exception("Failed to receive result from server!");
+                NetworkEvent ReturnEvent;
 
-                    if (ReturnEvent.Header == NetworkHeader.HEADER_ERROR)
-                        throw new Exception("An exception was caused on the server!");
-                    else if (ReturnEvent.Header != NetworkHeader.HEADER_RETURN)
-                        throw new Exception("Unexpected error");
-                }
+                if ((ReturnEvent = await ClientSocket.BlockingReceive()) == default(NetworkEvent))
+                    throw new Exception("Failed to receive result from server!");
+
+                if (ReturnEvent.Header == NetworkHeader.HEADER_ERROR)
+                    throw new Exception("An exception was caused on the server!");
+                else if (ReturnEvent.Header != NetworkHeader.HEADER_RETURN)
+                    throw new Exception("Unexpected error");
+
+                CallSem.Release();
+            }
         }
     }
 }

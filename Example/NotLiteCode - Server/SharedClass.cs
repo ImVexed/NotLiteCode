@@ -1,12 +1,14 @@
 ﻿using NotLiteCode.Server;
 using System;
 using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NotLiteCode___Server
 {
     public class SharedClass : IDisposable
     {
-        [NLCCall("Pinocchio")] // Any method without the [NLCCall] attribute will not be executable by the client
+        [NLCCall("Pinocchio")]
         public string CombineTwoStringsAndReturn(string s1, string s2)
         {
             return "Magical server says, s1 + s2 = " + s1 + s2;
@@ -19,8 +21,11 @@ namespace NotLiteCode___Server
         }
 
         [NLCCall("ThroughputTest")]
-        public void SpeedTest()
-        { }
+        public async Task SpeedTest()
+        {
+            // Simulate Async thing
+            await Task.CompletedTask;
+        }
 
         public void Dispose()
         {

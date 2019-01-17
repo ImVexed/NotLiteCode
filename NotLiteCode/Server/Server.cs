@@ -4,16 +4,18 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 namespace NotLiteCode.Server
 {
     public class Server<T> where T : IDisposable, new()
     {
         private void NetworkClientDisconnected(object sender, OnNetworkClientDisconnectedEventArgs e) =>
-          OnServerClientDisconnected?.Invoke(this, new OnServerClientDisconnectedEventArgs(e.Client));
+          OnServerClientDisconnected?.Start(this, new OnServerClientDisconnectedEventArgs(e.Client));
 
         private void NetworkExceptionOccurred(object sender, OnNetworkExceptionOccurredEventArgs e) =>
-          OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(e.Exception));
+          OnServerExceptionOccurred?.Start(this, new OnServerExceptionOccurredEventArgs(e.Exception));
 
         public event EventHandler<OnServerClientDisconnectedEventArgs> OnServerClientDisconnected;
 
@@ -23,7 +25,7 @@ namespace NotLiteCode.Server
 
         public event EventHandler<OnServerMethodInvokedEventArgs> OnServerMethodInvoked;
 
-        private Dictionary<string, RemotingMethod> RemotingMethods = new Dictionary<string, RemotingMethod>();
+        private readonly Dictionary<string, RemotingMethod> RemotingMethods = new Dictionary<string, RemotingMethod>();
 
         public Dictionary<EndPoint, RemoteClient<T>> Clients = new Dictionary<EndPoint, RemoteClient<T>>();
 
@@ -42,26 +44,31 @@ namespace NotLiteCode.Server
         {
             foreach (MethodInfo SharedMethod in typeof(T).GetMethods())
             {
-                var SharedMethodAttribute = SharedMethod.GetCustomAttributes(typeof(NLCCall), false);
-
-                if (SharedMethodAttribute.Length > 0)
+                if (SharedMethod.GetCustomAttribute(typeof(NLCCall)) is NLCCall NLCAttribute)
                 {
-                    var thisAttr = SharedMethodAttribute[0] as NLCCall;
-
-                    if (RemotingMethods.ContainsKey(thisAttr.Identifier))
+                    if (RemotingMethods.ContainsKey(NLCAttribute.Identifier))
                     {
-                        OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(new Exception($"Method with identifier {thisAttr.Identifier} already exists!")));
+                        OnServerExceptionOccurred?.Start(this, new OnServerExceptionOccurredEventArgs(new Exception($"Method with identifier {NLCAttribute.Identifier} already exists!")));
                         continue;
                     }
 
-                    RemotingMethods.Add(thisAttr.Identifier, new RemotingMethod() { MethodInfo = SharedMethod, WithContext = thisAttr.WithContext });
+                    var IsAsync = SharedMethod.GetCustomAttribute(typeof(AsyncStateMachineAttribute)) is AsyncStateMachineAttribute;
+                    var MethodType = SharedMethod.GetType();
+                    var HasAsyncResult = MethodType.IsGenericType && MethodType.GetGenericTypeDefinition() == typeof(Task<>);
+
+                    RemotingMethods.Add(NLCAttribute.Identifier, new RemotingMethod() {
+                        MethodInfo = SharedMethod,
+                        WithContext = NLCAttribute.WithContext,
+                        IsAsync = IsAsync,
+                        HasAsyncResult = HasAsyncResult
+                    });
                 }
             }
         }
 
         public void Start(int Port = 1337)
         {
-            ServerSocket.OnNetworkExceptionOccurred += (x, y) => OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(y.Exception));
+            ServerSocket.OnNetworkExceptionOccurred += (x, y) => OnServerExceptionOccurred?.Start(this, new OnServerExceptionOccurredEventArgs(y.Exception));
             ServerSocket.OnNetworkClientConnected += OnNetworkClientConnected;
 
             ServerSocket.Listen(Port);
@@ -88,7 +95,7 @@ namespace NotLiteCode.Server
 
             e.Client.BeginAcceptMessages();
 
-            OnServerClientConnected?.Invoke(this, new OnServerClientConnectedEventArgs(e.Client.BaseSocket.RemoteEndPoint));
+            OnServerClientConnected?.Start(this, new OnServerClientConnectedEventArgs(e.Client.BaseSocket.RemoteEndPoint));
         }
 
         public void DetatchFromSocket(NLCSocket Socket)
@@ -98,11 +105,11 @@ namespace NotLiteCode.Server
             Socket.OnNetworkMessageReceived -= OnNetworkMessageReceived;
         }
 
-        private void OnNetworkMessageReceived(object sender, OnNetworkMessageReceivedEventArgs e)
+        private async void OnNetworkMessageReceived(object sender, OnNetworkMessageReceivedEventArgs e)
         {
             if (e.Message.Header != NetworkHeader.HEADER_CALL && e.Message.Header != NetworkHeader.HEADER_MOVE)
             {
-                OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(new Exception("Invalid message type received!")));
+                OnServerExceptionOccurred?.Start(this, new OnServerExceptionOccurredEventArgs(new Exception("Invalid message type received!")));
                 return;
             }
 
@@ -113,7 +120,7 @@ namespace NotLiteCode.Server
 
             if (!RemotingMethods.TryGetValue(e.Message.Tag, out var TargetMethod))
             {
-                OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(new Exception("Client attempted to invoke invalid function!")));
+                OnServerExceptionOccurred?.Start(this, new OnServerExceptionOccurredEventArgs(new Exception("Client attempted to invoke invalid function!")));
                 ResultHeader = NetworkHeader.NONE;
             }
             else
@@ -131,7 +138,17 @@ namespace NotLiteCode.Server
                 {
                     var sw = Stopwatch.StartNew();
 
-                    Result = TargetMethod.MethodInfo.Invoke(Clients[RemoteEndPoint].SharedClass, Parameters.ToArray());
+                    if (TargetMethod.IsAsync)
+                    {
+                        // TODO: This feels dirty, maybe resolve the task type when it's being registered?
+                        var task = (Task)TargetMethod.MethodInfo.Invoke(Clients[RemoteEndPoint].SharedClass, Parameters.ToArray());
+                        await task.ConfigureAwait(false);
+
+                        if(TargetMethod.HasAsyncResult)
+                            Result = task.GetType().GetProperty("Result").GetValue(task);
+                    }
+                    else
+                        Result = TargetMethod.MethodInfo.Invoke(Clients[RemoteEndPoint].SharedClass, Parameters.ToArray());
 
                     sw.Stop();
 
@@ -141,16 +158,16 @@ namespace NotLiteCode.Server
                 }
                 catch (Exception ex)
                 {
-                    OnServerExceptionOccurred?.Invoke(this, new OnServerExceptionOccurredEventArgs(ex));
+                    OnServerExceptionOccurred?.Start(this, new OnServerExceptionOccurredEventArgs(ex));
                     ResultHeader = NetworkHeader.HEADER_ERROR;
                 }
 
-                OnServerMethodInvoked?.Invoke(this, new OnServerMethodInvokedEventArgs(RemoteEndPoint, e.Message.Tag, Duration, ResultHeader == NetworkHeader.HEADER_ERROR));
+                OnServerMethodInvoked?.Start(this, new OnServerMethodInvokedEventArgs(RemoteEndPoint, e.Message.Tag, Duration, ResultHeader == NetworkHeader.HEADER_ERROR));
             }
 
             var Event = new NetworkEvent(ResultHeader, e.Message.CallbackGuid, null, Result);
 
-            ((NLCSocket)sender).BlockingSend(Event);
+            await ((NLCSocket)sender).BlockingSend(Event);
         }
     }
 
@@ -171,6 +188,8 @@ namespace NotLiteCode.Server
     {
         public MethodInfo MethodInfo;
         public bool WithContext;
+        public bool IsAsync;
+        public bool HasAsyncResult;
     }
 
     public class RemoteClient<T> where T : IDisposable, new()
