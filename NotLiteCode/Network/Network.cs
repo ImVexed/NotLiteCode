@@ -1,5 +1,6 @@
 ﻿using NotLiteCode.Misc;
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -324,21 +325,21 @@ namespace NotLiteCode.Network
         /// Synchronously send a network event
         /// </summary>
         /// <param name="Event">Event to send</param>
-        /// <param name="Encrypt">Toggle encryption, this should only be used during the handshaking process</param>
-        public async Task<bool> BlockingSend(NetworkEvent Event, bool Encrypt = true)
+        public async Task<bool> BlockingSend(NetworkEvent Event)
         {
             await BaseSocketWriteSem.WaitAsync();
 
             var Buffer = Serializer.Serialize(Event.Package());
 
             int BytesSent;
-            if ((BytesSent = this.Send(BitConverter.GetBytes(Buffer.Length), 0, 4, SocketFlags.None, out var ErrorCode)) != 4 || ErrorCode != SocketError.Success)
+
+            if ((BytesSent = this.Send(BitConverter.GetBytes(Buffer.Length), 0, 4, SocketFlags.None, out var ErrorCode)) !=  4 || ErrorCode != SocketError.Success)
             {
-                OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected 4 sent {BytesSent} with exception {ErrorCode}")));
+                OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected {Buffer.Length} sent {BytesSent} with exception {ErrorCode}")));
                 return false;
             }
 
-            if ((BytesSent = this.Send(Buffer, 0, Buffer.Length, SocketFlags.None, out ErrorCode)) != Buffer.Length || ErrorCode != SocketError.Success)
+            if ((BytesSent = this.Send(Buffer, 0, Buffer.Length, SocketFlags.None, out  ErrorCode)) != Buffer.Length || ErrorCode != SocketError.Success)
             {
                 OnNetworkExceptionOccurred?.Start(this, new OnNetworkExceptionOccurredEventArgs(new Exception($"Invalid ammount of data sent to Client! Expected {Buffer.Length} sent {BytesSent} with exception {ErrorCode}")));
                 return false;

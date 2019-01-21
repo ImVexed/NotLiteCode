@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using static NotLiteCode.Helpers;
 
-namespace NotLiteCode
+namespace NotLiteCode.Client
 {
     public class Client
     {

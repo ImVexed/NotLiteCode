@@ -1,4 +1,4 @@
-﻿using NotLiteCode;
+﻿using NotLiteCode.Client;
 using NotLiteCode.Network;
 using System;
 using System.Diagnostics;
