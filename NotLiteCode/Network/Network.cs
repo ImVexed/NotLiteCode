@@ -216,7 +216,7 @@ namespace NotLiteCode.Network
 
             var ConnectingClient = BaseSocket.EndAccept(iAR);
 
-            OnNetworkClientConnected?.Start(this, new OnNetworkClientConnectedEventArgs(new NLCSocket(ConnectingClient, UseSSL, AllowInsecureCerts, ServerCertificate)));
+            OnNetworkClientConnected?.Start(this, new OnNetworkClientConnectedEventArgs(new NLCSocket(ConnectingClient, SerializationProdiver, UseSSL, AllowInsecureCerts, ServerCertificate)));
 
             BaseSocket.BeginAccept(AcceptCallback, null);
         }

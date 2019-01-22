@@ -1,5 +1,6 @@
 ﻿using NotLiteCode.Client;
 using NotLiteCode.Network;
+using NotLiteCode.Serialization;
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
@@ -35,7 +36,7 @@ namespace NotLiteCode___Client
             Console.Title = "NLC Client";
 
             // Create a socket with encryption enabled
-            var ClientSocket = new NLCSocket(UseSSL: true, AllowInsecureCerts: true);
+            var ClientSocket = new NLCSocket(new GroBufSerializationProvider(), UseSSL: true, AllowInsecureCerts: true);
 
             Client = new Client(ClientSocket);
 

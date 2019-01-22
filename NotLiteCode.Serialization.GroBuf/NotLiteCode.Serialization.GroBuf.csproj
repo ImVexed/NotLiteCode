@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	<TargetFrameworks>netcoreapp2.1;net452</TargetFrameworks>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|netcoreapp2.1|AnyCPU'">
+    <OutputPath>bin\Release\netcoreapp2.1\</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net452|AnyCPU'">
+    <OutputPath>bin\Release\net452\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="GroBuf" Version="1.4.6" />
+    <PackageReference Include="NotLiteCode" Version="1.5.0" />
+  </ItemGroup>
+
+</Project>

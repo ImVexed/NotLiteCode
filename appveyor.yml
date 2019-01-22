@@ -12,6 +12,7 @@ build:
   verbosity: minimal
 after_build:
   - nuget pack NotLiteCode\NotLiteCode.nuspec
+  - nuget pack NotLiteCode.Serialization.GroBuf\NotLiteCode.Serialization.GroBuf.nuspec
 deploy:
   provider: NuGet
   api_key:

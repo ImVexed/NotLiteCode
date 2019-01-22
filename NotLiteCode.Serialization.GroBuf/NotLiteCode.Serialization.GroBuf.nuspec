@@ -1,0 +1,19 @@
+﻿<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>NotLiteCode.Serialization.GroBuf</id>
+    <version>1.0</version>
+    <title>NotLiteCode.Serialization.GroBuf</title>
+    <authors>V-X</authors>
+    <owners>V-X</owners>
+    <licenseUrl>https://github.com/ImVexed/NotLiteCode/blob/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/ImVexed/NotLiteCode/NotLiteCode.Serialization.GroBuf</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>A GroBuf serialization provider for NotLiteCode</description>
+    <tags>rpc rmi remote</tags>
+  </metadata>
+  <files>
+    <file src="bin\Release\net452\net452\NotLiteCode.Serialization.GroBuf.dll" target="lib\net452\NotLiteCode.Serialization.GroBuf.dll" />
+    <file src="bin\Release\netcoreapp2.1\netcoreapp2.1\NotLiteCode.Serialization.GroBuf.dll" target="lib\netcoreapp2.1\NotLiteCode.Serialization.GroBuf.dll" />
+  </files>
+</package>

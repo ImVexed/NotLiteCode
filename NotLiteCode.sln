@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NotLiteCode - Client", "Exa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NotLiteCode - Server", "Example\NotLiteCode - Server\NotLiteCode - Server.csproj", "{4C4FB7AA-47C2-4717-9499-44EA91450A34}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NotLiteCode.Serialization.GroBuf", "NotLiteCode.Serialization.GroBuf\NotLiteCode.Serialization.GroBuf.csproj", "{38065060-BB2E-4F7C-AB8A-FBE953628931}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,6 +31,10 @@ Global
 		{4C4FB7AA-47C2-4717-9499-44EA91450A34}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4C4FB7AA-47C2-4717-9499-44EA91450A34}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4C4FB7AA-47C2-4717-9499-44EA91450A34}.Release|Any CPU.Build.0 = Release|Any CPU
+		{38065060-BB2E-4F7C-AB8A-FBE953628931}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{38065060-BB2E-4F7C-AB8A-FBE953628931}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{38065060-BB2E-4F7C-AB8A-FBE953628931}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{38065060-BB2E-4F7C-AB8A-FBE953628931}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

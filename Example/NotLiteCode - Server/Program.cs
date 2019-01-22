@@ -1,4 +1,5 @@
 ﻿using NotLiteCode.Network;
+using NotLiteCode.Serialization;
 using NotLiteCode.Server;
 using System;
 using System.Diagnostics;
@@ -15,7 +16,7 @@ namespace NotLiteCode___Server
         {
             Console.Title = "NLC Server";
 
-            var ServerSocket = new NLCSocket(UseSSL: true, ServerCertificate: GenerateSelfSignedCert("NLC", "localhost"));
+            var ServerSocket = new NLCSocket(new GroBufSerializationProvider(), UseSSL: true, ServerCertificate: GenerateSelfSignedCert("NLC", "localhost"));
 
             var Server = new Server<SharedClass>(ServerSocket);
 

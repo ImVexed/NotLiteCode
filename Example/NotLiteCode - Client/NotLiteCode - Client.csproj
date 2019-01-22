@@ -50,6 +50,10 @@
     <None Include="app.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\NotLiteCode.Serialization.GroBuf\NotLiteCode.Serialization.GroBuf.csproj">
+      <Project>{38065060-bb2e-4f7c-ab8a-fbe953628931}</Project>
+      <Name>NotLiteCode.Serialization.GroBuf</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\NotLiteCode\NotLiteCode.csproj">
       <Project>{3c70272f-b54e-4b72-b913-ee2ae7432d66}</Project>
       <Name>NotLiteCode</Name>
