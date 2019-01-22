@@ -15,7 +15,7 @@ namespace NotLiteCode___Server
         {
             Console.Title = "NLC Server";
 
-            var ServerSocket = new NLCSocket(true, GenerateSelfSignedCert("NLC", "localhost"));
+            var ServerSocket = new NLCSocket(UseSSL: true, ServerCertificate: GenerateSelfSignedCert("NLC", "localhost"));
 
             var Server = new Server<SharedClass>(ServerSocket);
 

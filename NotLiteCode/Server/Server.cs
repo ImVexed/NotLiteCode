@@ -2,6 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Net;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -60,9 +62,8 @@ namespace NotLiteCode.Server
                         throw new Exception($"Shared function {NLCAttribute.Identifier} is asynchronous but does not return a Task!");
 
                     RemotingMethods.Add(NLCAttribute.Identifier, new RemotingMethod() {
-                        MethodInfo = SharedMethod,
+                        Method = Helpers.CreateMethodWrapper(typeof(T), SharedMethod),
                         WithContext = NLCAttribute.WithContext,
-                        IsAsync = IsAsync,
                         HasAsyncResult = HasAsyncResult
                     });
                 }
@@ -141,17 +142,7 @@ namespace NotLiteCode.Server
                 {
                     var sw = Stopwatch.StartNew();
 
-                    if (TargetMethod.IsAsync)
-                    {
-                        // TODO: This feels dirty, maybe resolve the task type when it's being registered?
-                        var task = (Task)TargetMethod.MethodInfo.Invoke(Clients[RemoteEndPoint].SharedClass, Parameters.ToArray());
-                        await task.ConfigureAwait(false);
-
-                        if(TargetMethod.HasAsyncResult)
-                            Result = task.GetType().GetProperty("Result").GetValue(task);
-                    }
-                    else
-                        Result = TargetMethod.MethodInfo.Invoke(Clients[RemoteEndPoint].SharedClass, Parameters.ToArray());
+                    Result = await TargetMethod.Method.InvokeWrapper(TargetMethod.HasAsyncResult, Clients[RemoteEndPoint].SharedClass, Parameters.ToArray());
 
                     sw.Stop();
 
@@ -189,9 +180,8 @@ namespace NotLiteCode.Server
 
     public struct RemotingMethod
     {
-        public MethodInfo MethodInfo;
+        public Func<object, object[], object> Method;
         public bool WithContext;
-        public bool IsAsync;
         public bool HasAsyncResult;
     }
 

@@ -4,12 +4,13 @@ using System.Net;
 
 namespace NotLiteCode.Network
 {
+    [Serializable]
     public class NetworkEvent
     {
-        public readonly NetworkHeader Header;
-        public readonly string CallbackGuid;
-        public readonly string Tag;
-        public readonly object Data;
+        public NetworkHeader Header { get; set; }
+        public string CallbackGuid { get; set; }
+        public string Tag { get; set; }
+        public object Data { get; set; }
 
         public NetworkEvent(NetworkHeader Header, string Tag, object Data)
         {
@@ -25,25 +26,6 @@ namespace NotLiteCode.Network
             this.CallbackGuid = CallbackGuid;
             this.Tag = Tag;
             this.Data = Data;
-        }
-
-        public static bool TryParse(object[] NetworkMessage, out NetworkEvent Event)
-        {
-            if (NetworkMessage.Length < 1 || !NetworkMessage[0].TryParseEnum<NetworkHeader>(out var Header))
-            {
-                Event = default(NetworkEvent);
-                return false;
-            }
-            else
-            {
-                Event = new NetworkEvent(Header, NetworkMessage[1] as string, NetworkMessage[2] as string, NetworkMessage[3]);
-                return true;
-            }
-        }
-
-        public object[] Package()
-        {
-            return new object[] { Header, CallbackGuid, Tag, Data };
         }
     }
 

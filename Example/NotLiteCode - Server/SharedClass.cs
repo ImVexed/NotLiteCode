@@ -23,7 +23,7 @@ namespace NotLiteCode___Server
         [NLCCall("ThroughputTest")]
         public async Task SpeedTest()
         {
-            // Simulate Async thing
+            // Simulate asynchronous event
             await Task.CompletedTask;
         }
 

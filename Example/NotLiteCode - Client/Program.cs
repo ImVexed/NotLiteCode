@@ -35,7 +35,7 @@ namespace NotLiteCode___Client
             Console.Title = "NLC Client";
 
             // Create a socket with encryption enabled
-            var ClientSocket = new NLCSocket(true, true);
+            var ClientSocket = new NLCSocket(UseSSL: true, AllowInsecureCerts: true);
 
             Client = new Client(ClientSocket);
 
