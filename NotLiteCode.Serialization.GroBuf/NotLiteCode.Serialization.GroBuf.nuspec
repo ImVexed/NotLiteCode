@@ -11,6 +11,10 @@
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>A GroBuf serialization provider for NotLiteCode</description>
     <tags>rpc rmi remote</tags>
+	<dependencies>
+      <dependency id="GroBuf" version="1.4.6" />
+	  <dependency id="NotLiteCode" version="1.5.0" /> 
+    </dependencies>
   </metadata>
   <files>
     <file src="bin\Release\net452\net452\NotLiteCode.Serialization.GroBuf.dll" target="lib\net452\NotLiteCode.Serialization.GroBuf.dll" />
