@@ -16,7 +16,7 @@ after_build:
 deploy:
   provider: NuGet
   api_key:
-    secure: RFXCmJTnf+IcjnYPswteB2t40BH4cenUcr1fv8RD2InTbkWEVcPZWamfU/dGMsGG
+    secure: UMw0wyrvQWsWSaXOJ///2NLwm9dhc8WRLXkUolngxDocRQJeuumghIsqayZpP5NM
   artifact: NLC-Package
 artifacts:
   - path: '*.nupkg'
