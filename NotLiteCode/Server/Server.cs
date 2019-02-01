@@ -97,7 +97,8 @@ namespace NotLiteCode.Server
 
             Clients.Add(e.Client.BaseSocket.RemoteEndPoint, Client);
 
-            e.Client.BeginAcceptMessages();
+            if(!e.Client.IsListening)
+                e.Client.BeginAcceptMessages();
 
             OnServerClientConnected?.Start(this, new OnServerClientConnectedEventArgs(e.Client.BaseSocket.RemoteEndPoint));
         }
@@ -112,10 +113,7 @@ namespace NotLiteCode.Server
         private async void OnNetworkMessageReceived(object sender, OnNetworkMessageReceivedEventArgs e)
         {
             if (e.Message.Header != NetworkHeader.HEADER_CALL && e.Message.Header != NetworkHeader.HEADER_MOVE)
-            {
-                OnServerExceptionOccurred?.Start(this, new OnServerExceptionOccurredEventArgs(new Exception("Invalid message type received!")));
                 return;
-            }
 
             var RemoteEndPoint = ((NLCSocket)sender).BaseSocket.RemoteEndPoint;
 

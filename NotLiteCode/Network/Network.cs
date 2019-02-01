@@ -50,6 +50,7 @@ namespace NotLiteCode.Network
 
         public readonly bool UseSSL;
         public readonly bool UseCompression;
+        public bool IsListening = false;
 
         /// <summary>
         /// Continue to BeginAccept messages
@@ -226,6 +227,8 @@ namespace NotLiteCode.Network
         /// </summary>
         public void BeginAcceptMessages()
         {
+            this.IsListening = true;
+
             if (UseSSL)
                 SSLStream.BeginRead(NextBufferLength, 0, 4, MessageRetrieveCallback, null);
             else
@@ -258,7 +261,10 @@ namespace NotLiteCode.Network
             if (!StatusOK)
             {
                 OnNetworkClientDisconnected?.Start(this, new OnNetworkClientDisconnectedEventArgs(BaseSocket?.RemoteEndPoint));
+
                 this.Close();
+                this.IsListening = false;
+
                 return;
             }
 
