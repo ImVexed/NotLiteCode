@@ -8,10 +8,10 @@ namespace NotLiteCode___Server
 {
     public class SharedClass : IDisposable
     {
-        [NLCCall("Pinocchio", true)]
-        public async Task<string> CombineTwoStringsAndReturn(EndPoint ep, string s1, string s2)
+        [NLCCall("Pinocchio")]
+        public string CombineTwoStringsAndReturn(string s1, string s2)
         {
-            return await Task.FromResult("Magical server says, s1 + s2 = " + s1 + s2);
+            return "Magical server says, s1 + s2 = " + s1 + s2;
         }
 
         [NLCCall("JustATest", true)]
